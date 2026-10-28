@@ -1,11 +1,15 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=FRONTEND_DIR / "templates")
 
 
 @app.get("/", response_class=HTMLResponse)
