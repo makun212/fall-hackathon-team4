@@ -29,26 +29,38 @@ TND 2026秋のハッカソン（テーマ「AI×学校」）チーム4の作品�
 
 | 役割 | 技術 |
 | --- | --- |
-| フロントエンド（画面） | Next.js（TypeScript）, Tailwind CSS |
-| バックエンド（AI・裏側の処理） | FastAPI（Python） |
+| サーバー | FastAPI（Python） |
+| 画面 | htmx ＋ Jinja2（HTMLをPythonから返す） |
+| 見た目 | Tailwind CSS（CDN） |
 | AI | 【使うAIのAPI（OpenAI / Gemini / Claude など）】 |
+| データ保存 | 必要になったら SQLite |
 | ソース管理 | GitHub |
-| デプロイ | 【Vercel など】 |
+| デプロイ | 【Render など】 |
+
+チーム全員がPython中心のため、画面もPython（FastAPI）から返す構成にしています。
+TypeScriptなどの別言語を覚えなくても、全員が画面と処理の両方を書けます。
 
 ## フォルダ構成
 
 ```
 fall-hackathon-team4/
-├ frontend/   画面（Next.js）
-├ backend/    AI・裏側の処理（FastAPI）
-└ README.md
+├ frontend/              画面担当が触るところ
+│  ├ templates/          画面のHTML（htmx・Tailwind）
+│  │  ├ index.html       トップ画面
+│  │  └ _message.html    チャットの1往復分（htmxで追加される部品）
+│  └ static/             CSSや画像など
+└ backend/               処理担当が触るところ
+   ├ main.py             サーバーの処理（URLごとの動き、AIの呼び出し）
+   ├ requirements.txt    使っているPythonのライブラリ一覧
+   └ .env.example        APIキーの見本（中身は空）
 ```
+
+起動するのは backend の FastAPI 1つだけです。FastAPI が frontend の HTML を読み込んで画面を返します。
 
 ## 手元で動かす方法
 
 ### 必要なもの
 
-- Node.js 20以上
 - Python 3.11以上
 - Git
 
@@ -59,17 +71,7 @@ git clone https://github.com/makun212/fall-hackathon-team4.git
 cd fall-hackathon-team4
 ```
 
-### 2. フロントエンド
-
-```
-cd frontend
-npm install
-npm run dev
-```
-
-http://localhost:3000 を開いて画面が出ればOK
-
-### 3. バックエンド（別のターミナルで）
+### 2. 起動
 
 ```
 cd backend
@@ -80,7 +82,7 @@ cp .env.example .env            # .env にAPIキーを書く
 uvicorn main:app --reload
 ```
 
-http://localhost:8000/api/health で {"status":"ok"} が出ればOK
+http://localhost:8000 を開いて、メッセージを送るとダミーの返事が表示されればOK
 
 ターミナルを開き直したときは、毎回 `source .venv/Scripts/activate` を実行してから作業してください。
 
@@ -97,7 +99,8 @@ http://localhost:8000/api/health で {"status":"ok"} が出ればOK
 このリポジトリは公開（Public）なので、特に注意します。
 
 - APIキーは .env に書き、GitHub には絶対に上げない（.gitignore で除外済み）
-- AIのAPIはバックエンドからのみ呼び出し、APIキーをブラウザ側に出さない
+- AIのAPIはサーバー（FastAPI）からのみ呼び出し、APIキーをブラウザ側に出さない
+- 画面に表示する文字は Jinja2 の自動エスケープを使い、XSS（悪意のあるスクリプトの埋め込み）を防ぐ
 - プロンプトインジェクション対策（「今までの指示を無視して」などへの対策、システムプロンプトの固定）
 - 入力文字数の制限、連続リクエストの制限（API料金の使いすぎ防止）
 - 想定した攻撃と、実際に試した結果を記録しておく
