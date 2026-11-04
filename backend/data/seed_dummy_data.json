@@ -12,7 +12,7 @@
     ],
     "notes": [
       "materials.paragraphs の本文は p001 以外は【ダミー】。実装時は青空文庫の舞姫テキストを取得して差し替える。",
-      "メールアドレスは example.test ドメイン（実在しない）を使用。",
+      "メールアドレスは example.test 実在しないドメインを使用。",
       "required は issue の「必須」、optional は「できれば」または issueに無い提案を表す。"
     ]
   },
