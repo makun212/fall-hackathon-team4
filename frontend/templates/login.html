@@ -1,0 +1,23 @@
+{# 教師用・生徒用で共用のログイン画面。heading / login_url / home_url は main.py から渡す #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_primary, btn_secondary %}
+
+{% block title %}{{ heading }} | {% endblock %}
+
+{% block content %}
+{{ page_header(heading) }}
+<div class="max-w-md flex flex-col gap-6">
+  <p>学校のGoogleアカウントでログインしてください。</p>
+
+  {# 本番の実装時に、Googleの公式のボタンに差し替える #}
+  {{ btn_primary("Googleアカウントでログイン", href=login_url) }}
+
+  {# ログインの実装が完了したら、このリンクを削除する #}
+  <a href="{{ home_url }}" class="inline-flex items-center justify-center min-h-12 text-base text-muted underline hover:text-ink">（開発用）ログインせずに進む</a>
+
+  <div class="flex flex-col gap-2 pt-6 border-t border-line">
+    <p class="text-base text-muted">先生・生徒を選び直す場合は戻ってください</p>
+    <div>{{ btn_secondary("戻る", href="/") }}</div>
+  </div>
+</div>
+{% endblock %}
