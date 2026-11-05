@@ -1,0 +1,14 @@
+{# 生徒用：対話の終了画面（Figma 16 の仮の画面） #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_secondary %}
+
+{% block title %}対話は終了しました | {% endblock %}
+
+{% block content %}
+{{ page_header("対話は終了しました") }}
+<div class="flex flex-col gap-6">
+  <p>感想を先生に送りました。おつかれさまでした。</p>
+  {# 終了画面の移動先は、チームで未定。決まったら、ここを直す #}
+  <div>{{ btn_secondary("最初の画面に戻る", href="/student") }}</div>
+</div>
+{% endblock %}
