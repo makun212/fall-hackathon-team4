@@ -1,6 +1,9 @@
 import json
+import re
+import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -232,6 +235,162 @@ def find_conversation_summary(conversation_id: str):
             return summary
     return None
 
+# ---- 教師用：教材と使用範囲の選択 ----
+
+# 教材と範囲を決めたあとの移動先（ロール候補の選択画面）。URLを変えるときはここだけ直す
+NEXT_AFTER_MATERIAL = "/teacher/candidates"
+
+# 使用範囲の種類。この3つ以外は受け付けない
+RANGE_TYPES = ("all", "paragraph", "line")
+
+# 範囲の数字は、半角の整数（6桁以内）だけを受け付ける
+RANGE_NUMBER_PATTERN = re.compile(r"[0-9]{1,6}")
+
+# 冒頭の文がない教材で、先頭の段落から切り出す文字数
+OVERVIEW_FALLBACK_LENGTH = 60
+
+
+def read_material_records():
+    # 教材のデータを、ダミーデータから取り出す。教材のキー名を参照するのはここだけ
+    # DBに変えるときは、この関数の中身だけを、DBから同じ形で読む処理に差し替える
+    records = []
+    for m in SEED_DATA.get("materials") or []:
+        paragraphs = m.get("paragraphs") or []
+        records.append(
+            {
+                "id": m["id"],
+                "title": m["title"],
+                "author": m["author"],
+                "opening_preview": m.get("opening_preview"),
+                # 形式段落は、並び順のまま第1、第2…段落とする
+                "paragraph_texts": [p["text"] for p in paragraphs],
+                "max_line": paragraphs[-1]["line_end"] if paragraphs else 0,
+            }
+        )
+    return records
+
+
+def get_materials():
+    # 一覧用の教材（id、title、author、has_text）
+    return [
+        {
+            "id": r["id"],
+            "title": r["title"],
+            "author": r["author"],
+            "has_text": bool(r["paragraph_texts"]),
+        }
+        for r in read_material_records()
+    ]
+
+
+def get_material(material_id: str):
+    # 1件の教材の詳細を返す。なければ None
+    for r in read_material_records():
+        if r["id"] != material_id:
+            continue
+        overview = r["opening_preview"]
+        if not overview and r["paragraph_texts"]:
+            overview = r["paragraph_texts"][0][:OVERVIEW_FALLBACK_LENGTH] + "…"
+        return {
+            "id": r["id"],
+            "title": r["title"],
+            "author": r["author"],
+            "overview": overview or "",
+            "paragraph_count": len(r["paragraph_texts"]),
+            "max_line": r["max_line"],
+            "has_text": bool(r["paragraph_texts"]),
+        }
+    return None
+
+
+def find_selectable_material(material_id: str):
+    # get_materials() にあり、本文が登録されている教材だけを返す。それ以外は None
+    if material_id not in {m["id"] for m in get_materials()}:
+        return None
+    material = get_material(material_id)
+    if material is None or not material["has_text"]:
+        return None
+    return material
+
+
+def parse_range_number(value: str):
+    # 半角の整数（6桁以内）なら int を返す。それ以外は None
+    if not isinstance(value, str) or not RANGE_NUMBER_PATTERN.fullmatch(value):
+        return None
+    return int(value)
+
+
+def validate_range(material, range_type: str, start: str, end: str):
+    # 使用範囲を検証する。正しければ (True, None)、不正なら (False, エラーの文章)
+    if range_type not in RANGE_TYPES:
+        return False, "使用範囲の種類を選んでください。"
+    if range_type == "all":
+        return True, None
+
+    start_number = parse_range_number(start)
+    end_number = parse_range_number(end)
+    if start_number is None or end_number is None:
+        return False, "開始と終了に、半角の数字を入れてください。"
+
+    if range_type == "paragraph":
+        upper = material["paragraph_count"]
+        out_of_range = f"形式段落は、1〜{upper}の間で指定してください。"
+    else:
+        upper = material["max_line"]
+        out_of_range = f"行番号は、1〜{upper}の間で指定してください。"
+
+    if start_number > end_number:
+        return False, "開始は、終了以下の数字にしてください。"
+    # 0 は範囲外として扱う（「1〜」の案内のほうが直しやすいため）
+    if start_number < 1 or end_number > upper:
+        return False, out_of_range
+    return True, None
+
+
+def range_label(range_type: str, start: str, end: str):
+    # 検証済みの使用範囲を、画面に出す文にする
+    if range_type == "all":
+        return "全文"
+    if range_type == "paragraph":
+        return f"第{int(start)}〜{int(end)}段落"
+    return f"{int(start)}〜{int(end)}行"
+
+
+def build_next_after_material_url(material, range_type: str, start: str, end: str):
+    # 次の画面へのURL。ユーザーの入力ではなく、検証済みの値から組み立てる
+    query = {"material_id": material["id"], "range_type": range_type}
+    if range_type != "all":
+        query["start"] = str(int(start))
+        query["end"] = str(int(end))
+    return f"{NEXT_AFTER_MATERIAL}?{urlencode(query)}"
+
+
+def render_teacher_materials(
+    request: Request,
+    material=None,
+    range_type: str = "all",
+    start: str = "",
+    end: str = "",
+    error: str | None = None,
+    status_code: int = 200,
+):
+    # 教材選択画面を返す（GET と、POST の入力エラーで共用）
+    return templates.TemplateResponse(
+        request,
+        "teacher_materials.html",
+        {
+            "materials": get_materials(),
+            "material": material,
+            # 不正な種類は画面に戻さない（どのラジオも選ばれていない状態にする）
+            "range_type": range_type if range_type in RANGE_TYPES else "",
+            "start": start,
+            "end": end,
+            "error": error,
+        },
+        status_code=status_code,
+    )
+
+
 # Googleログインの入口（処理はバックエンド担当が作る）。URLを変えるときはここだけ直す
 GOOGLE_LOGIN_URL = "/auth/google/login"
 
@@ -277,6 +436,71 @@ def student_login(request: Request):
 @app.get("/teacher", response_class=HTMLResponse)
 def teacher_home(request: Request):
     return templates.TemplateResponse(request, "teacher_home.html")
+
+
+# 教師用：教材と使用範囲の選択画面。material_id は get_materials() にある、本文が登録済みのIDだけを選択中にする
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.get("/teacher/materials", response_class=HTMLResponse)
+def teacher_materials(request: Request, material_id: str = ""):
+    # 不明なIDや未指定は、エラーにせず「選択なし」の状態にする
+    return render_teacher_materials(request, find_selectable_material(material_id))
+
+
+# 教師用：教材選択の「決定」の送信先。正しければロール候補の選択画面へ進む
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.post("/teacher/materials", response_class=HTMLResponse)
+def teacher_materials_submit(
+    request: Request,
+    material_id: str = Form(""),
+    range_type: str = Form(""),
+    start: str = Form(""),
+    end: str = Form(""),
+):
+    material = find_selectable_material(material_id)
+    if material is None:
+        return RedirectResponse("/teacher/materials", status_code=303)
+
+    ok, error = validate_range(material, range_type, start, end)
+    if not ok:
+        # 選んだ教材・範囲の種類・入力した数字は、消さずに画面に戻す
+        return render_teacher_materials(
+            request, material, range_type=range_type, start=start, end=end, error=error, status_code=422
+        )
+
+    # TODO: ここで、題材の保存と「題材から立場の候補を返す処理」の呼び出しを行う（バックエンド担当）
+    return RedirectResponse(
+        build_next_after_material_url(material, range_type, start, end), status_code=303
+    )
+
+
+# 教師用：ロール候補の選択画面（仮）。次のissue「候補の選択・編集・確定画面」で本物に置き換える
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.get("/teacher/candidates", response_class=HTMLResponse)
+def teacher_candidates(
+    request: Request,
+    material_id: str = "",
+    range_type: str = "",
+    start: str = "",
+    end: str = "",
+):
+    # ダミーの待ち時間。AI接続後に削除する（待ち時間の表示の動作確認用）
+    time.sleep(2)
+
+    material = find_selectable_material(material_id)
+    if material is None:
+        return RedirectResponse("/teacher/materials", status_code=303)
+    ok, _ = validate_range(material, range_type, start, end)
+    if not ok:
+        return RedirectResponse("/teacher/materials", status_code=303)
+
+    return templates.TemplateResponse(
+        request,
+        "teacher_candidates.html",
+        {
+            "material": material,
+            "range_label": range_label(range_type, start, end),
+        },
+    )
 
 
 # 教師用：生徒のチャット一覧。only_detected=1 なら、検知がある会話だけにする

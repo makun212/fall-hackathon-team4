@@ -1,0 +1,20 @@
+{# 教師用：ロール候補の選択画面（仮）。material（get_material() の値）/ range_label は main.py から渡す #}
+{# 次のissue「候補の選択・編集・確定画面」で、この画面を本物に置き換える #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_secondary %}
+
+{% block title %}ロールの候補 | {% endblock %}
+
+{% block content %}
+{{ page_header("ロールの候補") }}
+<div class="flex flex-col gap-6">
+  <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 px-6 py-4 border border-line rounded-lg">
+    <dt class="text-muted">選んだ教材</dt>
+    <dd class="font-bold break-words">{{ material.title }}<span class="ml-2 text-base font-normal text-muted">{{ material.author }}</span></dd>
+    <dt class="text-muted">使用範囲</dt>
+    <dd class="font-bold">{{ range_label }}</dd>
+  </dl>
+  <p class="text-muted">ロールの候補の選択画面は準備中です</p>
+  <div>{{ btn_secondary("教材を選び直す", href="/teacher/materials") }}</div>
+</div>
+{% endblock %}
