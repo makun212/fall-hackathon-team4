@@ -1,0 +1,209 @@
+{# 教師用：教材と使用範囲の選択画面（Figma 4）。materials / material / range_type / start / end / error は main.py から渡す #}
+{# materials は get_materials()、material は get_material() の値（選んでいないときは None） #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_primary, btn_secondary, badge %}
+
+{# 移動先・送信先は、ここだけで定義する #}
+{% set materials_url = "/teacher/materials" %}
+{% set back_url = "/teacher" %}
+
+{% block title %}教材選択 | {% endblock %}
+
+{# 数字の入力欄（開始・終了の1つ分）。kind は "paragraph" / "line"。選んでいない種類は、最初から disabled にする（JavaScriptが動かなくても、選んだ種類の値だけが送信される） #}
+{% macro range_number(kind, part, label, value) %}
+<label for="{{ kind }}-{{ part }}" class="sr-only">{{ label }}</label>
+<input type="text" id="{{ kind }}-{{ part }}" name="{{ part }}" inputmode="numeric" maxlength="6" autocomplete="off"
+       value="{{ value if range_type == kind else '' }}"
+       data-range-input="{{ kind }}"{% if range_type != kind %} disabled{% endif %}
+       class="w-20 min-h-12 px-3 bg-paper border border-line rounded-lg text-center tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:bg-subtle disabled:text-muted disabled:cursor-not-allowed">
+{% endmacro %}
+
+{# 使用範囲の選択肢1つ分。中身（数字の入力欄）は {% call %} で渡す #}
+{# ラジオと数字の入力欄を1行に並べる（右の列の幅は、1180px の画面で約580px） #}
+{% macro range_option(value, label) %}
+<div class="flex flex-wrap items-center gap-x-4 px-4 py-2 border border-line rounded-lg has-checked:border-accent has-checked:bg-accent-soft">
+  <label class="flex items-center gap-3 w-28 min-h-12 font-bold cursor-pointer">
+    <input type="radio" name="range_type" value="{{ value }}" class="size-5 accent-accent"{% if range_type == value %} checked{% endif %}>
+    {{ label }}
+  </label>
+  {% if caller %}<div class="flex flex-wrap items-center gap-2" data-range-group="{{ value }}">{{ caller() }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+{# タブレットの横画面（1180×820）に合わせ、2列を画面の下まで伸ばす。ボタンは右の枠の下端に置く #}
+{# 画面の高さが低いとき（Safari の表示領域 約740）も、ふつうの状態ではスクロールせずに「決定」まで見える #}
+{# 見出しの下の余白（page_header の mb-8）を少し詰める #}
+<div class="-mb-4">{{ page_header("教材選択") }}</div>
+
+{# タブレット横画面（md以上）は、左（一覧）約40%・右（詳細）約60%の2列 #}
+{# 高さは「画面の高さ − 2列の上端まで（ヘッダー58px＋余白24px＋見出し62px、計144px）− 下の余白24px」= 100dvh − 168px（10.5rem） #}
+{# base.html や見出しの高さを変えたら、ここも直す。中身がこれより高いときは、中身に合わせて伸びる（min-h） #}
+<div class="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-6 md:min-h-[calc(100dvh-10.5rem)]">
+  {# ---- 左：教材の一覧 ---- #}
+  <section aria-labelledby="material-list-title" class="flex flex-col gap-3 min-w-0">
+    <h2 id="material-list-title" class="text-xl font-bold">教材の一覧</h2>
+    {% if not materials %}
+      <p class="px-4 py-8 bg-subtle rounded-lg text-center text-muted">教材がまだ登録されていません。</p>
+    {% else %}
+      {# 教材が増えても画面全体はスクロールせず、一覧の中だけをスクロールする（md以上） #}
+      {# 一覧は左の列の残りの高さいっぱいに広げる（absolute にして、一覧の長さが2列の高さを押し広げないようにする） #}
+      {# p-1 と -m-1 / -inset-1 は、フォーカスの枠線が、スクロールの枠で切れないようにするため #}
+      <div class="relative flex-1 min-h-0">
+      <ul id="material-list" class="flex flex-col gap-2 p-1 -m-1 md:m-0 md:absolute md:-inset-1 md:overflow-y-auto">
+        {% for m in materials %}
+          {% set selected = material is not none and material.id == m.id %}
+          <li>
+            {% if m.has_text %}
+              <a href="{{ materials_url }}?material_id={{ m.id | urlencode }}#material-detail"{% if selected %} aria-current="true"{% endif %}
+                 class="flex items-center justify-between gap-3 min-h-12 px-4 py-2 border rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent {{ 'border-accent bg-accent-soft' if selected else 'border-line bg-paper hover:border-accent' }}">
+                <span class="min-w-0">
+                  <span class="block font-bold leading-snug break-words">{{ m.title }}</span>
+                  <span class="block text-base text-muted leading-snug">{{ m.author }}</span>
+                </span>
+                {% if selected %}<span class="shrink-0">{{ badge("選択中", "accent") }}</span>{% endif %}
+              </a>
+            {% else %}
+              {# 本文が未登録の教材は選べない #}
+              <div class="flex items-center justify-between gap-3 min-h-12 px-4 py-2 border border-line rounded-lg bg-subtle text-muted">
+                <span class="min-w-0">
+                  <span class="block font-bold leading-snug break-words">{{ m.title }}</span>
+                  <span class="block text-base leading-snug">{{ m.author }}</span>
+                </span>
+                <span class="shrink-0 text-base">本文が未登録</span>
+              </div>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      </div>
+    {% endif %}
+  </section>
+
+  {# ---- 右：選んだ教材の詳細 ---- #}
+  <section id="material-detail" aria-label="選んだ教材" class="min-w-0 flex flex-col gap-4 p-6 border border-line rounded-lg">
+    {% if material is none %}
+      <p class="flex-1 flex items-center justify-center py-8 text-center text-muted">左の一覧から、教材を選んでください。</p>
+      {# 「戻る」は、教材を選んだときと同じ、枠の左下に置く #}
+      <div>{{ btn_secondary("戻る", href=back_url) }}</div>
+    {% else %}
+      <div>
+        <h2 class="text-2xl font-bold leading-snug break-words">{{ material.title }}</h2>
+        {# 著者名と段落数・行数を1行に並べる #}
+        <p class="flex flex-wrap justify-between gap-x-4 text-base text-muted">
+          <span>{{ material.author }}</span>
+          <span>全 {{ material.paragraph_count }} 段落／{{ material.max_line }} 行</span>
+        </p>
+      </div>
+
+      {# 冒頭の文は折り返し、最大3行まで表示する（画面の高さに収めるため） #}
+      {% if material.overview %}
+        {# 余白と行数の制限を別の要素にする（同じ要素だと、4行目が下の余白に見えてしまう） #}
+        <div class="px-4 py-3 bg-subtle rounded-lg">
+          <p class="whitespace-pre-wrap break-words line-clamp-3">{{ material.overview }}</p>
+        </div>
+      {% endif %}
+
+      {# フォームは枠の残りの高さに広げ、ボタンを枠の下端に置く #}
+      <form id="material-form" action="{{ materials_url }}" method="post" class="flex-1 flex flex-col gap-4">
+        <input type="hidden" name="material_id" value="{{ material.id }}">
+
+        <fieldset class="flex flex-col gap-2">
+          <legend class="mb-2 font-bold">使用範囲</legend>
+          {{ range_option("all", "全文") }}
+          {% call range_option("paragraph", "形式段落") %}
+            <span aria-hidden="true">第</span>{{ range_number("paragraph", "start", "形式段落の開始", start) }}<span aria-hidden="true">段落 〜 第</span>{{ range_number("paragraph", "end", "形式段落の終了", end) }}<span aria-hidden="true">段落</span>
+          {% endcall %}
+          {% call range_option("line", "行番号") %}
+            {{ range_number("line", "start", "行番号の開始", start) }}<span aria-hidden="true">行 〜</span>{{ range_number("line", "end", "行番号の終了", end) }}<span aria-hidden="true">行</span>
+          {% endcall %}
+        </fieldset>
+
+        {# エラーとボタンは、まとめて枠の下端に寄せる（エラーはボタンのすぐ上） #}
+        <div class="mt-auto flex flex-col gap-4">
+          {% if error %}
+            <div role="alert" class="flex items-start gap-3 px-4 py-2 bg-accent-soft border border-accent rounded-lg text-ink">
+              <span class="shrink-0 inline-flex items-center justify-center size-6 mt-0.5 rounded-full bg-accent text-paper text-base font-bold" aria-hidden="true">！</span>
+              <p>{{ error }}</p>
+            </div>
+          {% endif %}
+
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            {{ btn_secondary("戻る", href=back_url) }}
+            {{ btn_primary("決定", busy_label="送信中…") }}
+          </div>
+        </div>
+      </form>
+    {% endif %}
+  </section>
+</div>
+
+{# ---- AIの生成を待つ間の表示。送信したときだけ出す ---- #}
+<div id="loading-overlay" role="status" aria-live="polite"
+     class="hidden fixed inset-0 z-50 flex-col items-center justify-center gap-4 px-8 bg-paper/90 text-center">
+  <div class="size-12 rounded-full border-4 border-line border-t-accent animate-spin motion-reduce:animate-none" aria-hidden="true"></div>
+  {# 読み上げのため、文字は表示するときに入れる #}
+  <p id="loading-title" class="text-xl font-bold" data-text="AIが、ロールの候補を作っています…"></p>
+  <p id="loading-note" class="text-muted" data-text="少し時間がかかります。このまま、お待ちください。"></p>
+</div>
+
+<script>
+  // 選択中の教材が、一覧のスクロールの外にあるときは、見える位置まで一覧だけをスクロールする（画面全体は動かさない）
+  (() => {
+    const list = document.getElementById("material-list");
+    const current = list && list.querySelector('[aria-current="true"]');
+    if (!current) return;
+    const item = current.closest("li");
+    // 一覧の中での位置
+    const top = item.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    if (top + item.offsetHeight > list.clientHeight) {
+      list.scrollTop = top - list.clientHeight / 2 + item.offsetHeight / 2;
+    }
+  })();
+
+  (() => {
+    const form = document.getElementById("material-form");
+    if (!form) return;
+    const submit = form.querySelector("button");
+    const overlay = document.getElementById("loading-overlay");
+    const messages = overlay.querySelectorAll("[data-text]");
+
+    // 選んでいない種類の数字入力欄を、押せなく・送信されないようにする
+    const syncRange = () => {
+      const checked = form.querySelector('input[name="range_type"]:checked');
+      const current = checked ? checked.value : "";
+      form.querySelectorAll("[data-range-input]").forEach((input) => {
+        input.disabled = input.dataset.rangeInput !== current;
+      });
+      form.querySelectorAll("[data-range-group]").forEach((group) => {
+        group.classList.toggle("opacity-50", group.dataset.rangeGroup !== current);
+      });
+    };
+    form.querySelectorAll('input[name="range_type"]').forEach((radio) => {
+      radio.addEventListener("change", syncRange);
+    });
+    syncRange();
+
+    const hideOverlay = () => {
+      overlay.classList.add("hidden");
+      overlay.classList.remove("flex");
+      messages.forEach((el) => { el.textContent = ""; });
+      submit.disabled = false;
+    };
+
+    // 送信したら、待つ間の表示を出し、二重送信を防ぐ（ボタンの文字は _components.html の busy_label で「送信中…」になる）
+    form.addEventListener("submit", () => {
+      overlay.classList.remove("hidden");
+      overlay.classList.add("flex");
+      messages.forEach((el) => { el.textContent = el.dataset.text; });
+      submit.disabled = true;
+    });
+
+    // ブラウザの「戻る」でこの画面に戻ったときは、待つ間の表示とボタンを元に戻す
+    window.addEventListener("pageshow", () => {
+      hideOverlay();
+      syncRange();
+    });
+  })();
+</script>
+{% endblock %}

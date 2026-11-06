@@ -1,0 +1,86 @@
+{# 生徒用：対話後の感想入力画面（Figma 15）。role / question / pre_opinion / reflection / error / reflection_max_length は main.py から渡す #}
+{% extends "base.html" %}
+{% from "_components.html" import btn_primary, btn_secondary %}
+
+{# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
+{% set role_id = role["id"] %}
+{% set role_name = role["name"] %}
+
+{% block title %}対話のあとの考え | {% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-1">
+    <h1 class="text-2xl md:text-3xl font-bold leading-snug">いろいろな立場と話して、考えは変わりましたか？</h1>
+    <p class="text-base text-muted">{{ question }}</p>
+    <p class="text-base text-muted">話した相手：<span class="font-bold text-ink">{{ role_name }}</span></p>
+  </div>
+
+  {# フォームの送信先は、ここだけで定義する #}
+  <form id="reflection-form" action="/student/reflection" method="post" class="flex flex-col gap-6">
+    <input type="hidden" name="role_id" value="{{ role_id }}">
+
+    {# タブレット横画面（md以上）は「前の考え → 後の考え」の2列。スマホ幅は縦に並べ、矢印は下向きに回す #}
+    <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-4 md:gap-6 items-start">
+      {# 対話の前の考え（変更できない） #}
+      <section class="flex flex-col gap-2 min-w-0" aria-labelledby="pre-opinion-title">
+        <h2 id="pre-opinion-title" class="font-bold">対話の前の考え</h2>
+        <div class="px-4 py-3 bg-subtle border border-line rounded-lg whitespace-pre-wrap break-words">{{ pre_opinion }}</div>
+      </section>
+
+      <div class="flex justify-center md:pt-12 text-2xl text-muted" aria-hidden="true">
+        <span class="inline-block rotate-90 md:rotate-0">→</span>
+      </div>
+
+      {# 対話のあとの考え（感想） #}
+      <section class="flex flex-col gap-2 min-w-0">
+        <h2 class="font-bold"><label for="reflection">対話のあとの考え</label></h2>
+
+        {% if error %}
+          <div role="alert" class="flex items-start gap-3 px-4 py-2 bg-accent-soft border border-accent rounded-lg text-ink">
+            <span class="shrink-0 inline-flex items-center justify-center size-6 mt-0.5 rounded-full bg-accent text-paper text-base font-bold" aria-hidden="true">！</span>
+            <p>{{ error }}</p>
+          </div>
+        {% endif %}
+
+        <textarea id="reflection" name="reflection" rows="6" required maxlength="{{ reflection_max_length }}"
+                  placeholder="例：対話をして、〜について、考えが変わった（変わらなかった）。なぜなら、〜だからだ。"
+                  aria-describedby="reflection-count reflection-note"
+                  class="w-full min-h-12 px-4 py-3 bg-paper border border-line rounded-lg text-lg resize-y focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{{ reflection }}</textarea>
+        <p id="reflection-count" class="self-end text-base text-muted tabular-nums"><span id="reflection-count-now">0</span> / {{ reflection_max_length }}文字</p>
+      </section>
+    </div>
+
+    <p id="reflection-note" class="text-base text-muted">送信すると、先生に届きます。送信したあとは、書き直せません。</p>
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      {{ btn_secondary("もう一度対話", href="/student/chat?role_id=" ~ role_id|urlencode) }}
+      {{ btn_primary("送信する", busy_label="送信中…") }}
+    </div>
+  </form>
+</div>
+
+<script>
+  (() => {
+    const form = document.getElementById("reflection-form");
+    const input = document.getElementById("reflection");
+    const count = document.getElementById("reflection-count-now");
+    const submit = form.querySelector("button");
+
+    // 文字数の表示。上限は textarea の maxlength から読む（90%以上で赤）
+    const update = () => {
+      const near = input.value.length >= input.maxLength * 0.9;
+      count.parentElement.classList.toggle("text-accent", near);
+      count.parentElement.classList.toggle("text-muted", !near);
+      count.textContent = input.value.length;
+    };
+    input.addEventListener("input", update);
+    update();
+
+    // 二重送信の防止。押せなくすると、ボタンの文字が「送信中…」になる（_components.html の busy_label）
+    form.addEventListener("submit", () => { submit.disabled = true; });
+    // ブラウザの「戻る」で、押せないままの画面が出たときは元に戻す
+    window.addEventListener("pageshow", () => { submit.disabled = false; });
+  })();
+</script>
+{% endblock %}
