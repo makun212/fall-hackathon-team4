@@ -1,11 +1,12 @@
 import json
 import re
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -30,6 +31,11 @@ def load_seed_data():
 
 
 SEED_DATA = load_seed_data()
+
+# 仮の保存場所（サーバーのメモリ）。再起動すると消える。DBが入ったら、ロールの保存・取得の処理に差し替える
+# キーは (material_id, candidate_id)。値は {"name": ..., "features": [...]}、または None（元に戻した）
+ROLE_EDITS = {}
+ROLE_EDITS_LOCK = threading.Lock()
 
 
 def get_roles():
@@ -358,11 +364,21 @@ def range_label(range_type: str, start: str, end: str):
 
 def build_next_after_material_url(material, range_type: str, start: str, end: str):
     # 次の画面へのURL。ユーザーの入力ではなく、検証済みの値から組み立てる
+    return build_candidates_url(material, range_type, start, end)
+
+
+def build_candidates_url(material, range_type: str, start: str, end: str, selected=(), back: bool = False):
+    # ロールの選択画面（/teacher/candidates）へのURL。この画面へのリンクは、すべてこの関数で作る
+    # 引数は、検証済みの値だけを渡す（教材は find_selectable_material()、範囲は validate_range()、selected は候補にあるIDだけ）
     query = {"material_id": material["id"], "range_type": range_type}
     if range_type != "all":
         query["start"] = str(int(start))
         query["end"] = str(int(end))
-    return f"{NEXT_AFTER_MATERIAL}?{urlencode(query)}"
+    if selected:
+        query["selected"] = list(selected)
+    if back:
+        query["back"] = "1"
+    return f"{NEXT_AFTER_MATERIAL}?{urlencode(query, doseq=True)}"
 
 
 def render_teacher_materials(
@@ -385,6 +401,259 @@ def render_teacher_materials(
             "range_type": range_type if range_type in RANGE_TYPES else "",
             "start": start,
             "end": end,
+            "error": error,
+        },
+        status_code=status_code,
+    )
+
+
+# ---- 教師用：ロールの候補の選択 ----
+
+# ロールを確定したあとの移動先。本来は教材セットの選択画面（仮で教師用ホーム）。URLを変えるときはここだけ直す
+NEXT_AFTER_CONFIRM = "/teacher"
+
+# 1つの教材で表示する候補の数の上限
+ROLE_CANDIDATES_MAX = 6
+
+# 教師が選べるロールの数の上限。上限は、この定数1か所だけで定義する（画面の表示とJavaScriptも、この値を使う）
+ROLE_SELECT_MAX = 3
+
+STATIC_DIR = FRONTEND_DIR / "static"
+
+
+def find_static_image(path):
+    # /static/ の中に実在する画像のパスだけを返す。なければ（または static の外を指していれば）None
+    if not isinstance(path, str) or not path:
+        return None
+    static_root = STATIC_DIR.resolve()
+    target = (static_root / path).resolve()
+    if not target.is_relative_to(static_root) or not target.is_file():
+        return None
+    return path
+
+
+# ダミー。AIの候補生成と、保存した編集内容に、あとで差し替える
+def get_role_candidates(material_id: str):
+    # 教材の候補を、同じ形の辞書のリストで返す（最大6つ）。候補のキー名を参照するのはここだけ
+    # 形: candidate_id、name、summary、features（文字列のリスト）、image（なければ None）、edited（True / False）、
+    #     original（元のAIの案。編集を適用する前の、編集できる項目 {"name", "features"}）
+    # summary（立場の一言）は編集できないため、いつもAIの元の値
+    preset = SEED_DATA.get("preset_roles") or {}
+    if material_id == preset.get("material_id"):
+        # 舞姫（m001）は、プリセットのロールを候補として使う。id を candidate_id として使う
+        candidates = [
+            {
+                "candidate_id": r["id"],
+                "name": r["name"],
+                "summary": r.get("summary") or "",
+                "features": list(r.get("features") or []),
+                "image": find_static_image(r.get("image")),
+                "edited": False,
+            }
+            for r in preset.get("roles") or []
+        ]
+    else:
+        candidates = []
+        for group in SEED_DATA.get("role_candidates") or []:
+            if group.get("material_id") != material_id:
+                continue
+            candidates = [
+                {
+                    "candidate_id": c["candidate_id"],
+                    "name": c["name"],
+                    "summary": c.get("summary") or "",
+                    "features": list(c.get("features") or []),
+                    "image": find_static_image(c.get("image")),
+                    "edited": False,
+                }
+                for c in group.get("candidates") or []
+            ]
+            break
+
+    # 元のAIの案（編集を適用する前の値）を残す
+    for candidate in candidates:
+        candidate["original"] = role_fields(candidate)
+
+    # 1. 確定済みの教材セットに、編集後の特徴があれば置き換える
+    edited_features = {}
+    for material_set in SEED_DATA.get("material_sets") or []:
+        if material_set.get("material_id") != material_id or material_set.get("status") != "confirmed":
+            continue
+        for role in material_set.get("roles") or []:
+            features = (role.get("edited") or {}).get("features")
+            if features:
+                edited_features[role["role_id"]] = list(features)
+    for candidate in candidates:
+        if candidate["candidate_id"] in edited_features:
+            candidate["features"] = edited_features[candidate["candidate_id"]]
+            candidate["edited"] = True
+
+    # 2. 編集画面で保存した内容（ROLE_EDITS）があれば、上書きする。None は「元に戻した」
+    for candidate in candidates:
+        key = (material_id, candidate["candidate_id"])
+        if key not in ROLE_EDITS:
+            continue
+        saved = ROLE_EDITS[key]
+        fields = candidate["original"] if saved is None else saved
+        candidate["name"] = fields["name"]
+        candidate["features"] = list(fields["features"])
+        candidate["edited"] = role_fields(candidate) != candidate["original"]
+
+    return candidates[:ROLE_CANDIDATES_MAX]
+
+
+def role_fields(role):
+    # 編集できる項目（立場・思考の特徴）だけを取り出す。項目が決まったら、ここと role_edit_problems() を直す
+    return {"name": role["name"], "features": list(role["features"])}
+
+
+# ---- 教師用：ロールの編集 ----
+
+# 入力の上限。仮の値。チームで確認して決める。AIの指示文にそのまま入るので、長さを制限している
+# あわせて、ロールの選択画面のカード（1180×820 で3列×2段、1画面に収める）で崩れない長さにしている
+# - 立場: カードでは2行まで（1行 約14字。行頭に句読点を置かない送りを見込んで 20字）
+# - 特徴: カードでは1つ2行まで（1行 約18字。同じく送りを見込んで 30字）
+# AIの候補生成でも、この長さに収めるように指示する。値を変えたら、teacher_candidates.html のカードの見た目も確かめる
+ROLE_NAME_MAX = 20
+ROLE_FEATURE_MAX = 30
+ROLE_FEATURE_COUNT = 3
+
+
+def has_line_break(value: str):
+    # 改行（\n、\r のほか、Python が改行として扱う文字）を含むか。前後の空白は取り除いてから呼ぶ
+    return len(value.splitlines()) > 1
+
+
+def role_edit_problems(name: str, features):
+    # 入力の検証。(整えた値, [(欄の名前, エラーの文章), ...]) を返す。欄の名前は、フォームの name と同じ
+    cleaned_name = (name or "").strip()
+    cleaned_features = [(f or "").strip() for f in list(features)[:ROLE_FEATURE_COUNT]]
+    cleaned_features += [""] * (ROLE_FEATURE_COUNT - len(cleaned_features))
+
+    problems = []
+    if not cleaned_name:
+        problems.append(("name", "立場（ロールの名前）を入力してください。"))
+    elif len(cleaned_name) > ROLE_NAME_MAX:
+        problems.append(("name", f"立場は{ROLE_NAME_MAX}文字以内にしてください。"))
+    for n, feature in enumerate(cleaned_features, start=1):
+        if not feature:
+            problems.append((f"feature_{n}", f"思考の特徴{n}を入力してください。"))
+        elif len(feature) > ROLE_FEATURE_MAX:
+            problems.append((f"feature_{n}", f"思考の特徴{n}は{ROLE_FEATURE_MAX}文字以内にしてください。"))
+
+    values = {"name": cleaned_name}
+    values.update({f"feature_{n}": f for n, f in enumerate(cleaned_features, start=1)})
+    for field, value in values.items():
+        if has_line_break(value):
+            problems.append((field, "改行は使えません。"))
+
+    cleaned = {"name": cleaned_name, "features": cleaned_features}
+    return cleaned, problems
+
+
+def validate_role_edit(name: str, features):
+    # 入力を検証する。(整えた値, エラーの文章のリスト) を返す。同じ文章は1回だけにする
+    cleaned, problems = role_edit_problems(name, features)
+    return cleaned, list(dict.fromkeys(message for _, message in problems))
+
+
+def save_role_edit(material_id: str, candidate, cleaned):
+    # 編集内容を保存する。元のAIの案と同じなら None（元に戻した）を保存する
+    # TODO: DBに保存する。教材セットの保存（issue: ロールの保存・取得）と合わせる
+    value = None if cleaned == candidate["original"] else cleaned
+    with ROLE_EDITS_LOCK:
+        ROLE_EDITS[(material_id, candidate["candidate_id"])] = value
+
+
+def render_teacher_candidate_edit(
+    request: Request,
+    material,
+    range_type: str,
+    start: str,
+    end: str,
+    candidate,
+    selected_ids,
+    form,
+    is_reset: bool = False,
+    errors=None,
+    invalid_fields=None,
+    status_code: int = 200,
+):
+    # ロールの編集画面を返す（GET と、POST の入力エラーで共用）。form は {"name", "features"（3つ）}
+    original = candidate["original"]
+    return templates.TemplateResponse(
+        request,
+        "teacher_candidate_edit.html",
+        {
+            "material": material,
+            "range_type": range_type,
+            "start": start,
+            "end": end,
+            "candidate": candidate,
+            "original": original,
+            "form": form,
+            "is_reset": is_reset,
+            "errors": errors or [],
+            "invalid_fields": set(invalid_fields or []),
+            "selected_ids": selected_ids,
+            "back_url": build_candidates_url(material, range_type, start, end, selected_ids, back=True),
+            "name_max": ROLE_NAME_MAX,
+            "feature_max": ROLE_FEATURE_MAX,
+        },
+        status_code=status_code,
+    )
+
+
+def pad_features(features):
+    # 思考の特徴を ROLE_FEATURE_COUNT 個にそろえる（足りない分は空文字）
+    features = list(features)[:ROLE_FEATURE_COUNT]
+    return features + [""] * (ROLE_FEATURE_COUNT - len(features))
+
+
+def resolve_candidates_request(material_id: str, range_type: str, start: str, end: str):
+    # 教材と範囲を検証する。正しければ (教材, 範囲の種類, 開始, 終了)、不正なら None
+    # 開始・終了は、検証済みの数字を整えた文字列にする（"all" のときは空）
+    material = find_selectable_material(material_id)
+    if material is None:
+        return None
+    ok, _ = validate_range(material, range_type, start, end)
+    if not ok:
+        return None
+    if range_type == "all":
+        return material, range_type, "", ""
+    return material, range_type, str(int(start)), str(int(end))
+
+
+def filter_selected(candidates, selected):
+    # selected のうち、候補にあるIDだけを、候補の並び順で返す（重複は1つにする）
+    chosen = set(selected or [])
+    return [c["candidate_id"] for c in candidates if c["candidate_id"] in chosen]
+
+
+def render_teacher_candidates(
+    request: Request,
+    material,
+    range_type: str,
+    start: str,
+    end: str,
+    candidates,
+    selected_ids,
+    error: str | None = None,
+    status_code: int = 200,
+):
+    # ロールの選択画面を返す（GET と、POST の入力エラーで共用）。値はすべて検証済みのものを渡す
+    return templates.TemplateResponse(
+        request,
+        "teacher_candidates.html",
+        {
+            "material": material,
+            "range_type": range_type,
+            "start": start,
+            "end": end,
+            "range_label": range_label(range_type, start, end),
+            "candidates": candidates,
+            "selected_ids": selected_ids,
+            "select_max": ROLE_SELECT_MAX,
             "error": error,
         },
         status_code=status_code,
@@ -473,7 +742,7 @@ def teacher_materials_submit(
     )
 
 
-# 教師用：ロール候補の選択画面（仮）。次のissue「候補の選択・編集・確定画面」で本物に置き換える
+# 教師用：ロールの選択画面（Figma 5）。selected は候補にあるIDだけを選択済みにする。back=1 は編集画面などから戻ったとき
 # TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
 @app.get("/teacher/candidates", response_class=HTMLResponse)
 def teacher_candidates(
@@ -482,24 +751,139 @@ def teacher_candidates(
     range_type: str = "",
     start: str = "",
     end: str = "",
+    selected: list[str] = Query([]),
+    back: str = "",
 ):
-    # ダミーの待ち時間。AI接続後に削除する（待ち時間の表示の動作確認用）
-    time.sleep(2)
-
-    material = find_selectable_material(material_id)
-    if material is None:
+    resolved = resolve_candidates_request(material_id, range_type, start, end)
+    if resolved is None:
         return RedirectResponse("/teacher/materials", status_code=303)
-    ok, _ = validate_range(material, range_type, start, end)
-    if not ok:
-        return RedirectResponse("/teacher/materials", status_code=303)
+    material, range_type, start, end = resolved
 
-    return templates.TemplateResponse(
-        request,
-        "teacher_candidates.html",
-        {
-            "material": material,
-            "range_label": range_label(range_type, start, end),
-        },
+    # ダミーの待ち時間。AI接続後に削除する（待ち時間の表示の動作確認用）。戻ってきたとき（back=1）は待たせない
+    if back != "1":
+        time.sleep(2)
+
+    candidates = get_role_candidates(material["id"])
+    return render_teacher_candidates(
+        request, material, range_type, start, end, candidates, filter_selected(candidates, selected)
+    )
+
+
+# 教師用：ロールの選択画面の「この内容で追加する」の送信先。正しければ NEXT_AFTER_CONFIRM へ進む
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.post("/teacher/candidates/confirm", response_class=HTMLResponse)
+def teacher_candidates_confirm(
+    request: Request,
+    material_id: str = Form(""),
+    range_type: str = Form(""),
+    start: str = Form(""),
+    end: str = Form(""),
+    selected: list[str] = Form([]),
+):
+    resolved = resolve_candidates_request(material_id, range_type, start, end)
+    if resolved is None:
+        return RedirectResponse("/teacher/materials", status_code=303)
+    material, range_type, start, end = resolved
+
+    candidates = get_role_candidates(material["id"])
+    selected_ids = filter_selected(candidates, selected)
+    error = None
+    if not selected:
+        error = "使うロールを1つ以上選んでください。"
+    elif len(set(selected)) != len(selected_ids):
+        error = "選んだロールが正しくありません。もう一度選んでください。"
+    elif len(selected_ids) > ROLE_SELECT_MAX:
+        error = f"選べるロールは{ROLE_SELECT_MAX}つまでです。選ぶロールを減らしてください。"
+    if error:
+        # 選んだ状態（候補にあるIDだけ）は、消さずに画面に戻す
+        return render_teacher_candidates(
+            request, material, range_type, start, end, candidates, selected_ids, error=error, status_code=422
+        )
+
+    # TODO: ここで、選んだロール（と編集内容）を、教材セットとして保存する。保存後は、教材セットの選択画面に移動する
+    return RedirectResponse(NEXT_AFTER_CONFIRM, status_code=303)
+
+
+def resolve_candidate_edit_request(candidate_id: str, material_id: str, range_type: str, start: str, end: str):
+    # 編集画面の共通の検証。不正な教材・範囲は None（リダイレクト）。候補にない candidate_id は 404
+    # 正しければ (教材, 範囲の種類, 開始, 終了, 候補の一覧, 候補)
+    resolved = resolve_candidates_request(material_id, range_type, start, end)
+    if resolved is None:
+        return None
+    material, range_type, start, end = resolved
+    candidates = get_role_candidates(material["id"])
+    candidate = next((c for c in candidates if c["candidate_id"] == candidate_id), None)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="ロールの候補が見つかりません")
+    return material, range_type, start, end, candidates, candidate
+
+
+# 教師用：ロールの編集画面（Figma 6）。クエリはロールの選択画面と同じ。選んでいた候補（selected）は、戻り先に引き継ぐ
+# reset=1 のときは、元のAIの案を入力欄に表示する（保存はしない。「決定」を押すと保存される）
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.get("/teacher/candidates/{candidate_id}/edit", response_class=HTMLResponse)
+def teacher_candidate_edit(
+    request: Request,
+    candidate_id: str,
+    material_id: str = "",
+    range_type: str = "",
+    start: str = "",
+    end: str = "",
+    selected: list[str] = Query([]),
+    reset: str = "",
+):
+    resolved = resolve_candidate_edit_request(candidate_id, material_id, range_type, start, end)
+    if resolved is None:
+        return RedirectResponse("/teacher/materials", status_code=303)
+    material, range_type, start, end, candidates, candidate = resolved
+
+    is_reset = reset == "1"
+    source = candidate["original"] if is_reset else role_fields(candidate)
+    form = {"name": source["name"], "features": pad_features(source["features"])}
+    return render_teacher_candidate_edit(
+        request, material, range_type, start, end, candidate,
+        filter_selected(candidates, selected), form, is_reset=is_reset,
+    )
+
+
+# 教師用：ロールの編集画面の「決定」の送信先。正しければ保存して、ロールの選択画面に戻る
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.post("/teacher/candidates/{candidate_id}/edit", response_class=HTMLResponse)
+def teacher_candidate_edit_submit(
+    request: Request,
+    candidate_id: str,
+    name: str = Form(""),
+    feature_1: str = Form(""),
+    feature_2: str = Form(""),
+    feature_3: str = Form(""),
+    material_id: str = Form(""),
+    range_type: str = Form(""),
+    start: str = Form(""),
+    end: str = Form(""),
+    selected: list[str] = Form([]),
+):
+    resolved = resolve_candidate_edit_request(candidate_id, material_id, range_type, start, end)
+    if resolved is None:
+        return RedirectResponse("/teacher/materials", status_code=303)
+    material, range_type, start, end, candidates, candidate = resolved
+    selected_ids = filter_selected(candidates, selected)
+
+    features = [feature_1, feature_2, feature_3]
+    cleaned, errors = validate_role_edit(name, features)
+    if errors:
+        # 入力した値は、消さずに入力欄に戻す
+        _, problems = role_edit_problems(name, features)
+        form = {"name": name, "features": features}
+        return render_teacher_candidate_edit(
+            request, material, range_type, start, end, candidate, selected_ids, form,
+            errors=errors, invalid_fields=[field for field, _ in problems], status_code=422,
+        )
+
+    save_role_edit(material["id"], candidate, cleaned)
+
+    # 戻り先は、ユーザーの入力ではなく、検証済みの値から組み立てる
+    return RedirectResponse(
+        build_candidates_url(material, range_type, start, end, selected_ids, back=True), status_code=303
     )
 
 
