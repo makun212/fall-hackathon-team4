@@ -1,0 +1,38 @@
+{# アプリ名はここだけで変更する #}
+{% set app_name = "よみより" %}
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %}{{ app_name }}</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  {# 色と文字の決まり。使い方は frontend/DESIGN.md を見る #}
+  <style type="text/tailwindcss">
+    @theme {
+      --color-paper: #FFFFFF;        /* 背景 */
+      --color-subtle: #F0F4FA;       /* 薄い背景 */
+      --color-ink: #1F2A44;          /* 文字 */
+      --color-muted: #5B6780;        /* 補助の文字 */
+      --color-line: #D5DCE8;         /* 線 */
+      --color-accent: #C8102E;       /* 差し色（赤） */
+      --color-accent-soft: #FDECEE;  /* 差し色の薄い背景 */
+      --color-warning: #B45309;      /* 注意（軽い） */
+      --font-sans: "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-paper text-ink font-sans text-lg leading-relaxed min-h-screen">
+  {# 横幅・高さは、タブレットの横画面（1180×820、Safari の表示領域は約1180×740）に合わせている #}
+  {# ヘッダーの高さ（56px＋線2px）と main の上の余白（24px）を変えたら、index.html の高さの計算も直す #}
+  <header class="bg-paper border-b-2 border-accent">
+    <div class="max-w-6xl mx-auto px-8">
+      <a href="/" class="inline-flex items-center min-h-14 text-2xl font-bold">{{ app_name }}</a>
+    </div>
+  </header>
+  <main class="max-w-6xl mx-auto px-8 py-6">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

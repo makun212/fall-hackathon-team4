@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_components.html" import card %}
+
+{% block content %}
+{# タブレットの横画面で、2枚のカードを画面の真ん中に大きく出す #}
+{# 高さは「画面の高さ − base.html のヘッダー（58px）− main の上下の余白（24px×2）」 #}
+<div class="flex items-center min-h-[calc(100dvh-6.625rem)]">
+  <div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-8 *:min-h-64 *:text-center">
+    {% call card("先生", href="/teacher/login") %}{% endcall %}
+    {% call card("生徒", href="/student/login") %}{% endcall %}
+  </div>
+</div>
+{% endblock %}

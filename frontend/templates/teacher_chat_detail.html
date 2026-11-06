@@ -1,0 +1,12 @@
+{# 教師用：チャット閲覧画面（仮）。conversation は main.py の find_conversation_summary() から渡す #}
+{# 次のissue「チャット閲覧画面と検知結果の表示」で、この画面を本物に置き換える #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_secondary %}
+
+{% block title %}{{ conversation.student_name }}さんの会話 | {% endblock %}
+
+{% block content %}
+{{ page_header(conversation.student_name ~ "さんの会話（ロール: " ~ conversation.role_name ~ "）") }}
+<p class="mb-8 text-muted">閲覧画面は準備中です</p>
+{{ btn_secondary("一覧に戻る", href="/teacher/chats") }}
+{% endblock %}

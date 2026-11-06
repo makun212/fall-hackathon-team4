@@ -14,8 +14,8 @@
 
 {% block content %}
 {# チャット画面は、ウィンドウの高さにちょうど収める。上のロール表示と下の入力欄は動かさず、間のやり取りだけをスクロールする #}
-{# 高さは「画面の高さ − base.html のヘッダー（66px）− main の上の余白（40px）− 下の余白（-mb-6 で 16px に詰める）」。base.html の余白を変えたらここも直す #}
-<div class="flex flex-col md:flex-row gap-6 h-[calc(100dvh-7.625rem)] -mb-6">
+{# 高さは「画面の高さ − base.html のヘッダー（58px）− main の上の余白（24px）− 下の余白（-mb-2 で 16px に詰める）」。base.html の余白を変えたらここも直す #}
+<div class="flex flex-col md:flex-row gap-6 h-[calc(100dvh-6.125rem)] -mb-2">
   <section class="flex-1 min-w-0 min-h-0 flex flex-col">
     {# 話している相手。ロールがないときは何も出さない #}
     {% if role_name %}
@@ -82,7 +82,7 @@
 
   {# 根拠パネル。「根拠を表示する」を押したときだけ出る #}
   <aside id="evidence-panel" hidden aria-labelledby="evidence-title"
-         class="md:w-80 shrink-0 max-h-[50%] md:max-h-none overflow-y-auto flex flex-col gap-4 p-4 bg-paper border border-line rounded-lg">
+         class="md:w-80 lg:w-96 shrink-0 max-h-[50%] md:max-h-none overflow-y-auto flex flex-col gap-4 p-4 bg-paper border border-line rounded-lg">
     <div class="flex items-center justify-between gap-3">
       <h2 id="evidence-title" tabindex="-1" class="text-xl font-bold focus:outline-none">根拠</h2>
       <div data-evidence-close>{{ btn_secondary("閉じる") }}</div>
