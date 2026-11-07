@@ -11,7 +11,7 @@
 {% macro chat_url(c) %}/teacher/chats/{{ c.conversation_id }}{% endmacro %}
 
 {# 最後の発言。全角30文字を超えたら、30文字で切って「…」を付ける #}
-{% macro last_message(c) %}{{ c.last_message | truncate(31, true, "…", 0) }}{% endmacro %}
+{% macro last_message(c) %}{% if c.last_message | length > 30 %}{{ c.last_message[:30] }}…{% else %}{{ c.last_message }}{% endif %}{% endmacro %}
 
 {# 検知のバッジ。high を含む会話は赤＋「！要確認」、medium・low だけなら黄色系。検知がなければ「なし」 #}
 {% macro detection_badges(c) %}
