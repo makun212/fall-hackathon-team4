@@ -1,0 +1,42 @@
+{# 生徒がチャットの相手にするロールを選ぶ画面。roles は main.py の get_roles() から渡す #}
+{# タブレットの横画面（iPad 第10世代の Safari、高さ約740）で、スクロールせずにボタンまで見えるようにしている #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_primary, btn_secondary, radio_card, avatar %}
+
+{% block title %}ロールを選ぶ | {% endblock %}
+
+{% block content %}
+{{ page_header("ロールを選んでください") }}
+<p class="-mt-4 mb-4 text-muted">話し相手にする立場を1つ選んでください</p>
+
+<form action="/student/question" method="get">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for role in roles %}
+      {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
+      {# summary は画面の高さに入りきらないため、この画面では表示しない（特徴で立場の違いを伝える） #}
+      {% set role_id = role["id"] %}
+      {% set role_name = role["name"] %}
+      {% set role_features = role["features"] %}
+      {% set role_image = role["image"] %}
+
+      {% call radio_card("role_id", role_id, required=True) %}
+        <div class="flex items-center gap-3">
+          {{ avatar(role_name[:1], role_image) }}
+          <h2 class="pr-6 text-xl font-bold leading-snug">{{ role_name }}</h2>
+        </div>
+        <ul class="list-disc pl-5 text-base leading-snug">
+          {% for feature in role_features %}
+            <li>{{ feature }}</li>
+          {% endfor %}
+        </ul>
+      {% endcall %}
+    {% endfor %}
+
+    {# 5件を3列に並べると空く場所に、ボタンを置く #}
+    <div class="flex flex-col justify-center gap-3">
+      {{ btn_primary("このロールで対話を始める") }}
+      {{ btn_secondary("戻る", href="/student") }}
+    </div>
+  </div>
+</form>
+{% endblock %}
