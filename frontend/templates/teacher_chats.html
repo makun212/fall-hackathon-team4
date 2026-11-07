@@ -1,0 +1,110 @@
+{# 教師用：生徒のチャット一覧。conversations / material_set_title / detected_count / total_count / only_detected は main.py から渡す #}
+{# 会話の各値は main.py の get_conversation_summaries() が作る。md 以上は表、md 未満はカードで、同じデータを見せる #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_secondary, badge %}
+
+{% block title %}生徒のチャット一覧 | {% endblock %}
+
+{# ---- 表とカードで共通に使う部品。会話の値を参照するのはここだけ ---- #}
+
+{# 閲覧画面へのURL。URLを変えるときはここだけ直す #}
+{% macro chat_url(c) %}/teacher/chats/{{ c.conversation_id }}{% endmacro %}
+
+{# 最後の発言。全角30文字を超えたら、30文字で切って「…」を付ける #}
+{% macro last_message(c) %}{{ c.last_message | truncate(31, true, "…", 0) }}{% endmacro %}
+
+{# 検知のバッジ。high を含む会話は赤＋「！要確認」、medium・low だけなら黄色系。検知がなければ「なし」 #}
+{% macro detection_badges(c) %}
+{% if c.detections %}
+  {% set kind = "accent" if c.max_level == "high" else "warning" %}
+  <div class="flex flex-wrap gap-1.5">
+    {% if c.max_level == "high" %}{{ badge("！要確認", "accent") }}{% endif %}
+    {% for d in c.detections %}{{ badge(d.type_label ~ "（" ~ d.level_label ~ "）", kind) }}{% endfor %}
+  </div>
+{% else %}
+  <span class="text-muted">なし</span>
+{% endif %}
+{% endmacro %}
+
+{# 行・カードの左の線と背景。high は線＋薄い赤の背景、medium・low は線だけ #}
+{% macro row_tone(c) %}{% if c.max_level == "high" %}border-l-accent bg-accent-soft{% elif c.detections %}border-l-accent bg-paper hover:bg-subtle{% else %}border-l-transparent bg-paper hover:bg-subtle{% endif %}{% endmacro %}
+
+{# 押せる範囲を、行（カード）全体に広げるリンク。親に relative を付けて使う #}
+{% set stretched_link = "font-bold underline-offset-4 hover:underline after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-accent" %}
+
+{# 絞り込みのリンク。今の状態の方を、赤い枠・薄い赤の背景にする #}
+{% macro filter_link(label, href, current) %}
+<a href="{{ href }}"{% if current %} aria-current="page"{% endif %}
+   class="inline-flex items-center justify-center min-h-12 px-5 rounded-lg border font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent {{ 'border-accent bg-accent-soft text-accent' if current else 'border-line bg-paper text-muted hover:border-accent hover:text-ink' }}">{{ label }}</a>
+{% endmacro %}
+
+{# 表の列の幅（見出しと各行でそろえる）。「開く」の列は、幅が足りない lg 未満では出さない（行全体を押せるため） #}
+{% set grid_cols = "md:grid-cols-[minmax(5.5rem,1fr)_minmax(7rem,1.2fr)_minmax(8rem,2.4fr)_3rem_3.5rem_minmax(10rem,1.6fr)] lg:grid-cols-[minmax(6rem,1fr)_minmax(8rem,1.2fr)_minmax(10rem,2.4fr)_3.5rem_4rem_minmax(12rem,1.6fr)_auto]" %}
+
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-6">
+  <div>
+    {{ page_header("生徒のチャット一覧") }}
+    {% if material_set_title %}
+      <p class="-mt-6 text-base text-muted">{{ material_set_title }}</p>
+    {% endif %}
+  </div>
+  <p class="text-base text-muted">全 <span class="font-bold text-ink">{{ total_count }}</span> 件 / 検知あり <span class="font-bold text-accent">{{ detected_count }}</span> 件</p>
+</div>
+
+<nav aria-label="絞り込み" class="flex flex-wrap gap-3 mb-6">
+  {{ filter_link("すべて", "/teacher/chats", not only_detected) }}
+  {{ filter_link("検知ありのみ", "/teacher/chats?only_detected=1", only_detected) }}
+</nav>
+
+{% if total_count == 0 %}
+  <p class="px-4 py-8 bg-subtle rounded-lg text-center text-muted">まだ会話がありません。生徒が対話を始めると、ここに表示されます。</p>
+{% elif not conversations %}
+  <p class="px-4 py-8 bg-subtle rounded-lg text-center text-muted">検知がある会話はありません。</p>
+{% else %}
+  {# ---- md 以上：表 ---- #}
+  <div role="table" aria-label="生徒のチャット一覧" class="hidden md:block border border-line rounded-lg overflow-hidden text-base">
+    <div role="rowgroup">
+      <div role="row" class="grid {{ grid_cols }} gap-x-2 lg:gap-x-3 items-center px-3 py-2 bg-subtle border-l-4 border-l-transparent font-bold text-muted">
+        <span role="columnheader">生徒</span>
+        <span role="columnheader">ロール</span>
+        <span role="columnheader">最後の発言</span>
+        <span role="columnheader" class="text-right">発言数</span>
+        <span role="columnheader">最終時刻</span>
+        <span role="columnheader">検知</span>
+        <span role="columnheader" class="hidden lg:block sr-only">操作</span>
+      </div>
+    </div>
+    <div role="rowgroup">
+      {% for c in conversations %}
+        <div role="row" class="relative grid {{ grid_cols }} gap-x-2 lg:gap-x-3 items-center min-h-16 px-3 py-2 border-t border-line border-l-4 {{ row_tone(c) }}">
+          <span role="cell" class="min-w-0 break-words"><a href="{{ chat_url(c) }}" class="{{ stretched_link }}">{{ c.student_name }}</a></span>
+          <span role="cell" class="min-w-0 break-words">{{ c.role_name }}</span>
+          <span role="cell" class="min-w-0 break-words text-muted">{{ last_message(c) }}</span>
+          <span role="cell" class="text-right tabular-nums">{{ c.message_count }}</span>
+          <span role="cell" class="tabular-nums">{{ c.last_sent_at or "—" }}</span>
+          <span role="cell" class="min-w-0">{{ detection_badges(c) }}</span>
+          <span role="cell" class="hidden lg:block">{{ btn_secondary("開く", href=chat_url(c)) }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ---- md 未満：カード ---- #}
+  <ul class="md:hidden flex flex-col gap-3">
+    {% for c in conversations %}
+      <li class="relative flex flex-col gap-2 p-4 border border-line border-l-4 rounded-lg {{ row_tone(c) }}">
+        <div class="flex items-baseline justify-between gap-3">
+          <a href="{{ chat_url(c) }}" class="text-xl {{ stretched_link }} after:rounded-lg">{{ c.student_name }}</a>
+          <span class="shrink-0 text-base text-muted tabular-nums">{{ c.last_sent_at or "—" }}・{{ c.message_count }}件</span>
+        </div>
+        <p class="text-base">ロール: {{ c.role_name }}</p>
+        <p class="text-base text-muted break-words">{{ last_message(c) }}</p>
+        <div class="text-base">{{ detection_badges(c) }}</div>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<div class="mt-8">{{ btn_secondary("戻る", href="/teacher") }}</div>
+{% endblock %}
