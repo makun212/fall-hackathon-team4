@@ -1,0 +1,78 @@
+{# 生徒用：対話前の問いかけ画面。role / question / opinion / error / opinion_max_length は main.py から渡す #}
+{# タブレットの横画面（iPad 第10世代の Safari、高さ約740）で、エラーが出たときもスクロールせずにボタンまで見えるようにしている #}
+{% extends "base.html" %}
+{% from "_components.html" import btn_primary, btn_secondary, avatar %}
+
+{# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
+{% set role_id = role["id"] %}
+{% set role_name = role["name"] %}
+{% set role_summary = role["summary"] %}
+{% set role_image = role["image"] %}
+
+{% block title %}対話をする前に | {% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto -mt-4 flex flex-col gap-4">
+  <div class="flex flex-col gap-1">
+    <p class="text-base text-muted">対話をする前に</p>
+    <h1 class="text-2xl font-bold leading-snug">{{ question }}</h1>
+  </div>
+
+  {# 話す相手のロール #}
+  <div class="flex items-center gap-3 pb-3 border-b border-line">
+    {{ avatar(role_name[:1], role_image) }}
+    <div class="min-w-0">
+      <p class="text-base leading-snug">話す相手：<span class="font-bold">{{ role_name }}</span></p>
+      {% if role_summary %}
+        <p class="text-base text-muted leading-snug">{{ role_summary }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# フォームの送信先は、ここだけで定義する #}
+  <form action="/student/question" method="post" class="flex flex-col gap-3">
+    <input type="hidden" name="role_id" value="{{ role_id }}">
+
+    {% if error %}
+      <div role="alert" class="flex items-start gap-3 px-4 py-2 bg-accent-soft border border-accent rounded-lg text-ink">
+        <span class="shrink-0 inline-flex items-center justify-center size-6 mt-0.5 rounded-full bg-accent text-paper text-base font-bold" aria-hidden="true">！</span>
+        <p>{{ error }}</p>
+      </div>
+    {% endif %}
+
+    <div class="flex flex-col gap-1">
+      <label for="opinion" class="font-bold">あなたの考え</label>
+      <textarea id="opinion" name="opinion" rows="5" required maxlength="{{ opinion_max_length }}"
+                placeholder="例：私は〜だと思う。なぜなら、〜だからだ。"
+                aria-describedby="opinion-note opinion-count"
+                class="w-full px-4 py-2 bg-paper border border-line rounded-lg resize-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{{ opinion }}</textarea>
+      {# 補足の文と文字数を1行に並べて、高さを抑える #}
+      <div class="flex flex-wrap items-start justify-between gap-x-4">
+        <p id="opinion-note" class="text-base text-muted">あとで、対話した後の考えと比べます。いまの考えを、そのまま書いてください。</p>
+        <p id="opinion-count" class="ml-auto shrink-0 text-base text-muted tabular-nums"><span id="opinion-count-now">0</span> / {{ opinion_max_length }}文字</p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      {{ btn_secondary("ロールを選び直す", href="/student/roles") }}
+      {{ btn_primary("対話を始める") }}
+    </div>
+  </form>
+</div>
+
+<script>
+  // 文字数の表示。上限は textarea の maxlength から読む（90%以上で赤）
+  (() => {
+    const input = document.getElementById("opinion");
+    const count = document.getElementById("opinion-count-now");
+    const update = () => {
+      const near = input.value.length >= input.maxLength * 0.9;
+      count.parentElement.classList.toggle("text-accent", near);
+      count.parentElement.classList.toggle("text-muted", !near);
+      count.textContent = input.value.length;
+    };
+    input.addEventListener("input", update);
+    update();
+  })();
+</script>
+{% endblock %}
