@@ -12,7 +12,7 @@
 {% block title %}対話をする前に | {% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto -mt-4 flex flex-col gap-4">
+<div class="max-w-4xl mx-auto flex flex-col gap-4">
   <div class="flex flex-col gap-1">
     <p class="text-base text-muted">対話をする前に</p>
     <h1 class="text-2xl font-bold leading-snug">{{ question }}</h1>
@@ -42,7 +42,7 @@
 
     <div class="flex flex-col gap-1">
       <label for="opinion" class="font-bold">あなたの考え</label>
-      <textarea id="opinion" name="opinion" rows="5" required maxlength="{{ opinion_max_length }}"
+      <textarea id="opinion" name="opinion" rows="6" required maxlength="{{ opinion_max_length }}"
                 placeholder="例：私は〜だと思う。なぜなら、〜だからだ。"
                 aria-describedby="opinion-note opinion-count"
                 class="w-full px-4 py-2 bg-paper border border-line rounded-lg resize-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{{ opinion }}</textarea>
