@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_primary, btn_secondary %}
+
+{% block title %}生徒 | {% endblock %}
+
+{% block content %}
+{{ page_header("生徒用の画面（準備中）") }}
+<div class="flex flex-wrap gap-4">
+  {{ btn_primary("ロールを選ぶ", href="/student/roles") }}
+  {{ btn_primary("チャット画面へ", href="/student/chat") }}
+  {{ btn_secondary("トップに戻る", href="/") }}
+</div>
+{% endblock %}

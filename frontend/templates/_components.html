@@ -1,0 +1,71 @@
+{# 全画面で使う共通の部品。使い方は frontend/DESIGN.md を見る #}
+
+{# ページの見出し（下に赤い細い線） #}
+{% macro page_header(title) %}
+<div class="mb-8">
+  <h1 class="inline-block pb-2 border-b-2 border-accent text-3xl font-bold">{{ title }}</h1>
+</div>
+{% endmacro %}
+
+{# ボタン共通の形（高さ48px以上） #}
+{% set _btn_base = "inline-flex items-center justify-center min-h-12 px-6 rounded-lg text-lg font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" %}
+
+{# 主なボタン（赤い背景・白い文字）。href があればリンク、なければ button #}
+{# busy_label を渡すと、ボタンが押せない間（disabled）だけ、その文字に切り替わる（例: 「送信中…」） #}
+{% macro btn_primary(label, href=None, busy_label=None) %}
+{% set cls = _btn_base ~ " bg-accent text-paper hover:bg-accent/90" %}
+{% if href %}<a href="{{ href }}" class="{{ cls }}">{{ label }}</a>
+{% elif busy_label %}<button class="group {{ cls }} disabled:opacity-60 disabled:cursor-not-allowed"><span class="group-disabled:hidden">{{ label }}</span><span class="hidden group-disabled:inline">{{ busy_label }}</span></button>
+{% else %}<button class="{{ cls }}">{{ label }}</button>{% endif %}
+{% endmacro %}
+
+{# 補助のボタン（白い背景・赤い枠線と文字） #}
+{% macro btn_secondary(label, href=None) %}
+{% set cls = _btn_base ~ " bg-paper text-accent border border-accent hover:bg-accent-soft" %}
+{% if href %}<a href="{{ href }}" class="{{ cls }}">{{ label }}</a>{% else %}<button class="{{ cls }}">{{ label }}</button>{% endif %}
+{% endmacro %}
+
+{# 選択用のカード。中身は {% call %} で渡す。href があればクリックで移動 #}
+{% macro card(title, href=None) %}
+{% if href %}
+<a href="{{ href }}" class="flex flex-col justify-center gap-2 p-6 bg-paper border border-line rounded-lg hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+  <h2 class="text-2xl font-bold">{{ title }}</h2>
+  {{ caller() }}
+</a>
+{% else %}
+<div class="flex flex-col justify-center gap-2 p-6 bg-paper border border-line rounded-lg">
+  <h2 class="text-2xl font-bold">{{ title }}</h2>
+  {{ caller() }}
+</div>
+{% endif %}
+{% endmacro %}
+
+{# ラジオボタンで1つ選ぶカード。カード全体を押して選べる。選ぶと赤い枠・薄い赤の背景・「選択中」ラベルになる。中身は {% call %} で渡す #}
+{% macro radio_card(name, value, required=False) %}
+<label class="group relative flex flex-col gap-2 px-4 py-3 bg-paper border border-line rounded-lg cursor-pointer hover:border-accent has-checked:border-accent has-checked:bg-accent-soft has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent">
+  <input type="radio" name="{{ name }}" value="{{ value }}" class="absolute top-4 right-4 size-5 accent-accent focus-visible:outline-none"{% if required %} required{% endif %}>
+  {# 「選択中」のラベルは上の枠線に重ねて、カードの高さを増やさない #}
+  <span class="absolute -top-3.5 right-3 hidden group-has-checked:inline-flex">{{ badge("選択中", "accent") }}</span>
+  {{ caller() }}
+</label>
+{% endmacro %}
+
+{# ロールの丸いアイコン。text（名前の最初の1文字など）を出し、画像があれば上に重ねる。画像が読み込めなければ画像だけ消す #}
+{% macro avatar(text, image=None) %}
+<div class="relative shrink-0 flex items-center justify-center size-12 rounded-full bg-subtle border border-line overflow-hidden text-xl font-bold text-muted" aria-hidden="true">
+  {{ text }}
+  {% if image %}
+    <img src="/static/{{ image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# 小さなラベル。kind は "default" / "accent" / "warning" #}
+{% macro badge(text, kind="default") %}
+{% set styles = {
+  "default": "bg-subtle text-muted border-line",
+  "accent": "bg-accent-soft text-accent border-accent",
+  "warning": "bg-paper text-warning border-warning",
+} %}
+<span class="inline-flex items-center px-2 py-0.5 rounded border text-base font-bold {{ styles.get(kind, styles['default']) }}">{{ text }}</span>
+{% endmacro %}
