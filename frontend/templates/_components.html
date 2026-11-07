@@ -12,17 +12,18 @@
 
 {# 主なボタン（赤い背景・白い文字）。href があればリンク、なければ button #}
 {# busy_label を渡すと、ボタンが押せない間（disabled）だけ、その文字に切り替わる（例: 「送信中…」） #}
-{% macro btn_primary(label, href=None, busy_label=None) %}
+{# attrs は button に付ける属性の辞書（例: {"type": "submit", "formaction": "…"}）。値は xmlattr でエスケープされる #}
+{% macro btn_primary(label, href=None, busy_label=None, attrs=None) %}
 {% set cls = _btn_base ~ " bg-accent text-paper hover:bg-accent/90" %}
 {% if href %}<a href="{{ href }}" class="{{ cls }}">{{ label }}</a>
-{% elif busy_label %}<button class="group {{ cls }} disabled:opacity-60 disabled:cursor-not-allowed"><span class="group-disabled:hidden">{{ label }}</span><span class="hidden group-disabled:inline">{{ busy_label }}</span></button>
-{% else %}<button class="{{ cls }}">{{ label }}</button>{% endif %}
+{% elif busy_label %}<button{{ attrs | xmlattr if attrs }} class="group {{ cls }} disabled:opacity-60 disabled:cursor-not-allowed"><span class="group-disabled:hidden">{{ label }}</span><span class="hidden group-disabled:inline">{{ busy_label }}</span></button>
+{% else %}<button{{ attrs | xmlattr if attrs }} class="{{ cls }}">{{ label }}</button>{% endif %}
 {% endmacro %}
 
-{# 補助のボタン（白い背景・赤い枠線と文字） #}
-{% macro btn_secondary(label, href=None) %}
+{# 補助のボタン（白い背景・赤い枠線と文字）。attrs は btn_primary と同じ #}
+{% macro btn_secondary(label, href=None, attrs=None) %}
 {% set cls = _btn_base ~ " bg-paper text-accent border border-accent hover:bg-accent-soft" %}
-{% if href %}<a href="{{ href }}" class="{{ cls }}">{{ label }}</a>{% else %}<button class="{{ cls }}">{{ label }}</button>{% endif %}
+{% if href %}<a href="{{ href }}" class="{{ cls }}">{{ label }}</a>{% else %}<button{{ attrs | xmlattr if attrs }} class="{{ cls }}">{{ label }}</button>{% endif %}
 {% endmacro %}
 
 {# 選択用のカード。中身は {% call %} で渡す。href があればクリックで移動 #}

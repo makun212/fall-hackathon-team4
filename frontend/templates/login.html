@@ -5,9 +5,10 @@
 {% block title %}{{ heading }} | {% endblock %}
 
 {% block content %}
-{{ page_header(heading) }}
-<div class="max-w-md flex flex-col gap-6">
-  <p>学校のGoogleアカウントでログインしてください。</p>
+{# 横に広い画面では、ログインの欄を真ん中に寄せる #}
+<div class="max-w-md mx-auto md:mt-8 flex flex-col gap-6">
+  <div class="-mb-6">{{ page_header(heading) }}</div>
+  <p>Googleアカウントでログインしてください。</p>
 
   {# 本番の実装時に、Googleの公式のボタンに差し替える #}
   {{ btn_primary("Googleアカウントでログイン", href=login_url) }}
