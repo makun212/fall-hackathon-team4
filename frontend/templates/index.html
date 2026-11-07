@@ -1,23 +1,177 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AIロールプレイ学習ツール</title>
-  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <main class="max-w-2xl mx-auto p-4">
-    <h1 class="text-2xl font-bold mb-4">AIロールプレイ学習ツール</h1>
-    <div id="chat" class="space-y-3 mb-4"></div>
-    <form hx-post="/chat" hx-target="#chat" hx-swap="beforeend"
-          hx-on::after-request="this.reset()" class="flex gap-2">
-      <input name="message" required maxlength="500"
-             placeholder="登場人物に話しかけてみよう"
-             class="flex-1 border rounded px-3 py-2">
-      <button class="bg-blue-600 text-white rounded px-4 py-2">送信</button>
+{# 生徒のチャット画面。role は main.py から渡す（ロール選択画面から来たときだけ） #}
+{% extends "base.html" %}
+{% from "_components.html" import btn_primary, btn_secondary, avatar %}
+
+{# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
+{% set role_name = role["name"] if role else None %}
+{% set role_summary = role["summary"] if role else None %}
+{% set role_id = role["id"] if role else None %}
+{% set role_image = role["image"] if role else None %}
+
+{% block title %}チャット | {% endblock %}
+
+{% block content %}
+{# チャット画面は、ウィンドウの高さにちょうど収める。上のロール表示と下の入力欄は動かさず、間のやり取りだけをスクロールする #}
+{# 高さは「画面の高さ − base.html のヘッダー（66px）− main の上の余白（40px）− 下の余白（-mb-6 で 16px に詰める）」。base.html の余白を変えたらここも直す #}
+<div class="flex flex-col md:flex-row gap-6 h-[calc(100dvh-7.625rem)] -mb-6">
+  <section class="flex-1 min-w-0 min-h-0 flex flex-col">
+    {# 話している相手。ロールがないときは何も出さない #}
+    {% if role_name %}
+      <div class="shrink-0 mb-4 pb-3 border-b border-line flex items-center gap-3">
+        {{ avatar(role_name[:1], role_image) }}
+        <div class="min-w-0">
+          <h1 class="text-xl font-bold leading-snug">{{ role_name }}と対話中</h1>
+          {% if role_summary %}
+            <p class="text-base text-muted leading-snug">{{ role_summary }}</p>
+          {% endif %}
+        </div>
+      </div>
+    {% else %}
+      <h1 class="sr-only">チャット</h1>
+    {% endif %}
+
+    {# やり取りの枠。ここだけスクロールし、新しい発言が来たら自動で一番下まで進む #}
+    <div id="chat-scroll" tabindex="0" aria-label="会話の履歴"
+         class="flex-1 min-h-0 overflow-y-scroll [scrollbar-gutter:stable] p-4 bg-paper border border-line rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+      <div id="chat" class="flex flex-col gap-4" aria-live="polite"></div>
+
+      {# 返事を待つ間だけ出る吹き出し。htmx が送信中に htmx-request を付け、返事が来たら外す #}
+      {# 見た目は _message.html の相手の吹き出しとそろえる #}
+      <div id="typing" class="hidden [&.htmx-request]:flex items-start gap-3 mt-4" role="status">
+        {{ avatar(role_name[:1] if role_name else "AI", role_image) }}
+        <p class="mt-8 inline-flex items-center gap-2 px-4 py-2 bg-paper border border-line rounded-2xl rounded-tl-sm text-muted">
+          {{ role_name ~ "が考えています" if role_name else "AIが考えています" }}
+          <span class="inline-flex gap-1" aria-hidden="true">
+            <span class="size-1.5 rounded-full bg-muted animate-pulse motion-reduce:animate-none"></span>
+            <span class="size-1.5 rounded-full bg-muted animate-pulse motion-reduce:animate-none [animation-delay:300ms]"></span>
+            <span class="size-1.5 rounded-full bg-muted animate-pulse motion-reduce:animate-none [animation-delay:600ms]"></span>
+          </span>
+          <span class="sr-only">…</span>
+        </p>
+      </div>
+    </div>
+
+    {# エラーを出す場所。文章は下の script が固定の文から選んで入れる #}
+    <div id="chat-error" hidden role="alert" class="shrink-0 flex items-start gap-3 mt-4 px-4 py-3 bg-accent-soft border border-accent rounded-lg text-ink">
+      <span class="shrink-0 inline-flex items-center justify-center size-6 rounded-full bg-accent text-paper text-base font-bold" aria-hidden="true">！</span>
+      <p id="chat-error-text"></p>
+    </div>
+
+    {# 失敗したときは入力を消さない（成功したときだけ reset する） #}
+    <form id="chat-form" hx-post="/chat" hx-target="#chat" hx-swap="beforeend scroll:#chat-scroll:bottom"
+          hx-indicator="#typing" hx-disabled-elt="find button"
+          hx-request='{"timeout": 30000}'
+          class="shrink-0 flex flex-col gap-1 mt-4">
+      <label for="chat-message" class="sr-only">メッセージ</label>
+      {# 返事の吹き出しに相手のアイコンを出すため、ロールも一緒に送る #}
+      {% if role_id %}<input type="hidden" name="role_id" value="{{ role_id }}">{% endif %}
+      <div class="flex gap-3">
+        <input id="chat-message" name="message" required maxlength="200" autocomplete="off"
+               placeholder="登場人物に話しかけてみよう" aria-describedby="chat-count"
+               class="flex-1 min-w-0 min-h-12 px-4 bg-paper border border-line rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+        {{ btn_primary("送信", busy_label="送信中…") }}
+      </div>
+      <p id="chat-count" class="self-end text-base text-muted"><span id="chat-count-now">0</span> / 200文字</p>
     </form>
-  </main>
-</body>
-</html>
+  </section>
+
+  {# 根拠パネル。「根拠を表示する」を押したときだけ出る #}
+  <aside id="evidence-panel" hidden aria-labelledby="evidence-title"
+         class="md:w-80 shrink-0 max-h-[50%] md:max-h-none overflow-y-auto flex flex-col gap-4 p-4 bg-paper border border-line rounded-lg">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="evidence-title" tabindex="-1" class="text-xl font-bold focus:outline-none">根拠</h2>
+      <div data-evidence-close>{{ btn_secondary("閉じる") }}</div>
+    </div>
+    <p class="-mt-2 text-base text-muted">AIの返事のもとになった本文です</p>
+    <div id="evidence-body"></div>
+  </aside>
+</div>
+
+<script>
+  (() => {
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("chat-message");
+    const count = document.getElementById("chat-count-now");
+    const errorBox = document.getElementById("chat-error");
+    const errorText = document.getElementById("chat-error-text");
+    const panel = document.getElementById("evidence-panel");
+    const panelTitle = document.getElementById("evidence-title");
+    const panelBody = document.getElementById("evidence-body");
+    const chatScroll = document.getElementById("chat-scroll");
+
+    // ---- やり取りの枠を一番下まで進める ----
+    // 返事が来たときは hx-swap の scroll が進める。送信した直後は「考えています…」が見えるように、ここで進める
+    const scrollToBottom = () => { chatScroll.scrollTop = chatScroll.scrollHeight; };
+    form.addEventListener("htmx:beforeRequest", () => setTimeout(scrollToBottom));
+
+    // ---- 文字数の表示 ----
+    const updateCount = () => {
+      count.textContent = input.value.length;
+      count.parentElement.classList.toggle("text-warning", input.value.length >= 180);
+    };
+    input.addEventListener("input", updateCount);
+
+    // ---- エラーの表示（htmx は 400番台・500番台を画面に出さないため） ----
+    // サーバーの応答の中身は使わず、ここの固定の文だけを出す
+    const MESSAGES = {
+      422: "文章が長すぎます。200文字以内にしてください。",
+      429: "送信が多すぎます。少し待ってから、もう一度送ってください。",
+      server: "AIからの返事を受け取れませんでした。もう一度送ってみてください。",
+      network: "通信できませんでした。ネットワークを確認して、もう一度送ってください。",
+      timeout: "返事に時間がかかっています。もう一度送ってみてください。",
+      other: "うまく送信できませんでした。もう一度送ってみてください。",
+    };
+    const showError = (text) => {
+      errorText.textContent = text;
+      errorBox.hidden = false;
+    };
+
+    form.addEventListener("htmx:beforeRequest", () => { errorBox.hidden = true; });
+    form.addEventListener("htmx:responseError", (e) => {
+      const status = e.detail.xhr.status;
+      if (MESSAGES[status]) showError(MESSAGES[status]);
+      else if (status >= 500) showError(MESSAGES.server);
+      else showError(MESSAGES.other);
+    });
+    form.addEventListener("htmx:sendError", () => showError(MESSAGES.network));
+    form.addEventListener("htmx:timeout", () => showError(MESSAGES.timeout));
+
+    // 成功したときだけ入力を消す。どちらの場合も入力欄に戻る
+    form.addEventListener("htmx:afterRequest", (e) => {
+      if (e.detail.successful) {
+        form.reset();
+        updateCount();
+      }
+      setTimeout(() => input.focus());
+    });
+
+    // ---- 根拠パネルの開閉 ----
+    let opener = null;
+    const closePanel = () => {
+      panel.hidden = true;
+      if (opener) {
+        opener.setAttribute("aria-expanded", "false");
+        opener.focus();
+        opener = null;
+      }
+    };
+    document.addEventListener("click", (e) => {
+      const openButton = e.target.closest("[data-evidence] button");
+      if (openButton) {
+        if (opener) opener.setAttribute("aria-expanded", "false");
+        opener = openButton;
+        opener.setAttribute("aria-expanded", "true");
+        const template = openButton.closest("[data-evidence]").querySelector("template");
+        panelBody.replaceChildren(template.content.cloneNode(true));
+        panel.hidden = false;
+        panelTitle.focus();
+        return;
+      }
+      if (e.target.closest("[data-evidence-close] button")) closePanel();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !panel.hidden) closePanel();
+    });
+  })();
+</script>
+{% endblock %}
