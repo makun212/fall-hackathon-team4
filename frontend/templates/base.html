@@ -22,8 +22,11 @@
       --font-sans: "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
     }
   </style>
+  {% block head %}{% endblock %}
 </head>
 <body class="bg-paper text-ink font-sans text-lg leading-relaxed min-h-screen">
+  {# 全画面で別の見た目にしたいページ（ログイン画面など）は、このブロックごと差し替える #}
+  {% block body %}
   <header class="bg-paper border-b-2 border-accent">
     <div class="max-w-5xl mx-auto px-6">
       <a href="/" class="inline-flex items-center min-h-16 text-2xl font-bold">{{ app_name }}</a>
@@ -32,5 +35,6 @@
   <main class="max-w-5xl mx-auto px-6 py-10">
     {% block content %}{% endblock %}
   </main>
+  {% endblock %}
 </body>
 </html>

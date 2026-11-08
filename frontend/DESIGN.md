@@ -65,3 +65,14 @@
 5. **派手にしない。** グラデーション、強い影、たくさんの角丸や太い枠は使わない。細い線（`border border-line`）と余白で区切る
 6. **表示する文字は Jinja2 の自動エスケープに任せる。** `|safe` は使わない
 7. CSSファイルは作らない。見た目は class で書く
+
+## ログイン画面の例外
+
+ログイン画面（`templates/login.html`）だけは、最初に目に入る「顔」として、上のルールとは別の見た目にしています。
+
+- 背景は深紅、文字は生成り、差し色は金。書体は Google Fonts の Noto Sans JP / Noto Serif JP
+- 色は `login-` で始まる名前で、`login.html` の中の `@theme` に定義している（ほかの画面では使わない）
+- 飾りの絵（SVG）は `templates/partials/_login_objects.html` にある
+- ボタンもこの画面専用の形なので、部品（`btn_primary` など）は使っていない
+
+ほかの画面では、この例外の色・書体を使わないでください。
