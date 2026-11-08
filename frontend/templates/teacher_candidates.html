@@ -1,0 +1,136 @@
+{# 教師用：ロールの選択画面（Figma 5）。値はすべて main.py の render_teacher_candidates() から渡す（検証済み） #}
+{# material: get_material() の値 / range_type・start・end: 使用範囲 / range_label: 範囲の表示用の文章 #}
+{# candidates: get_role_candidates() の値（最大6つ） / selected_ids: 選択済みの候補ID / error: エラーの文章（なければ None） #}
+{# select_max: 選べるロールの数の上限（main.py の ROLE_SELECT_MAX） #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_primary, btn_secondary, avatar, badge %}
+
+{# 移動先・送信先は、ここだけで定義する #}
+{% set confirm_url = "/teacher/candidates/confirm" %}
+{% set materials_url = "/teacher/materials" %}
+
+{% block title %}ロールの選択 | {% endblock %}
+
+{% block content %}
+{# タブレットの横画面（1180×820）で、スクロールせずに、候補6つ（3列×2段）と右下のボタンまで見えるようにしている #}
+{# 実測（Windows の Chrome、1180×820）では、エラーの表示があるときも、中身は画面の高さに収まる #}
+{# 高さを抑えるため、作品名（範囲）は見出しの横に置き、カードの「使う」「選択中」「編集する」は、カードの下の行にまとめている #}
+{# base.html・見出し・カードの中身（文字の大きさや行数）を変えたら、高さを見直す #}
+<form id="candidates-form" method="post" action="{{ confirm_url }}" class="flex flex-col gap-4">
+  {# 教材と範囲は、確定（POST）と編集画面（GET）の両方に引き継ぐ #}
+  <input type="hidden" name="material_id" value="{{ material.id }}">
+  <input type="hidden" name="range_type" value="{{ range_type }}">
+  {% if range_type != "all" %}
+    <input type="hidden" name="start" value="{{ start }}">
+    <input type="hidden" name="end" value="{{ end }}">
+  {% endif %}
+
+  {# 見出しと作品名（範囲）。page_header の下の余白（mb-8）を打ち消して、間隔は form の gap にそろえる #}
+  <div class="flex flex-wrap items-baseline gap-x-4 -mb-8 min-w-0">
+    {{ page_header("ロールの選択") }}
+    <p class="text-muted break-words">{{ material.title }}（{{ range_label }}）</p>
+  </div>
+
+  {% if not candidates %}
+    <p class="px-4 py-8 bg-subtle rounded-lg text-center text-muted">ロールの候補がありません。教材を選び直してください。</p>
+  {% else %}
+    {# 説明の行。エラーがあるときは、説明の代わりにエラーを出す（高さを増やさないため） #}
+    <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
+      {% if error %}
+        <div role="alert" class="flex items-center gap-3 px-4 py-1 bg-accent-soft border border-accent rounded-lg text-ink">
+          <span class="shrink-0 inline-flex items-center justify-center size-6 rounded-full bg-accent text-paper text-base font-bold" aria-hidden="true">！</span>
+          <p>{{ error }}</p>
+        </div>
+      {% else %}
+        <p>生徒との対話に使うロールを、{{ select_max }}つまで選んでください。選んだロールだけが、使われます。</p>
+      {% endif %}
+      <p class="shrink-0 tabular-nums" aria-live="polite">
+        <span class="font-bold">選択中 <span id="selected-count">{{ selected_ids | length }}</span> / {{ select_max }}</span>
+        {# 上限まで選んだときの案内。文字は JavaScript が textContent で入れる #}
+        <span id="selected-limit" class="ml-2 text-muted" data-text="これ以上は選べません"></span>
+      </p>
+    </div>
+
+    {# タブレット横画面（md以上）は3列 #}
+    <ul class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {% for c in candidates %}
+        {# 候補のキー名は main.py の get_role_candidates() でそろえてある #}
+        {% set checkbox_id = "candidate-" ~ loop.index %}
+        <li class="group relative bg-paper border border-line rounded-lg hover:border-accent has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-accent">
+          {# 「編集する」のボタン以外は、どこを押しても選べる #}
+          {# 上限まで選んだあと、選んでいないカードは押せない見た目にする（has-[:disabled]） #}
+          <label for="{{ checkbox_id }}" class="h-full flex flex-col gap-1.5 px-4 pt-3 pb-2.5 cursor-pointer has-[:disabled]:opacity-50 has-[:disabled]:cursor-not-allowed">
+            {# ロール名は2行まで。2行でも丸い画像（48px）より高くならない文字の大きさと行の高さにしている #}
+            {# 文字数の上限は main.py の ROLE_NAME_MAX・ROLE_FEATURE_MAX（このカードに収まる長さ）。上限を超えるデータが来ても崩れないよう、2行で切る #}
+            <div class="flex items-center gap-3 min-w-0">
+              {{ avatar(c.name[:1], c.image) }}
+              <h2 class="min-w-0 text-lg font-bold leading-tight break-words line-clamp-2">{{ c.name }}</h2>
+            </div>
+            {# 特徴は1つ2行まで（3つで最大6行）。6行でも2段が画面に収まるよう、行の高さを詰めている #}
+            <ul class="flex-1 list-disc pl-5 text-base leading-tight">
+              {% for feature in c.features %}
+                {# line-clamp は li に付けると「・」が消えるため、中の span に付ける #}
+                <li><span class="line-clamp-2">{{ feature }}</span></li>
+              {% endfor %}
+            </ul>
+            {# カードの下の行（左）。チェックボックスと「選択中」。右は「編集する」のボタンのために空けておく（pr-32） #}
+            {# チェックボックスの押せる範囲は44px以上（min-h-11） #}
+            <div class="flex items-center gap-3 min-h-12 pr-32">
+              <span class="inline-flex items-center gap-2 min-h-11 min-w-11 font-bold">
+                <input type="checkbox" id="{{ checkbox_id }}" name="selected" value="{{ c.candidate_id }}"
+                       aria-label="{{ c.name }}を使う"
+                       class="size-5 accent-accent focus-visible:outline-none"{% if c.candidate_id in selected_ids %} checked{% endif %}>
+                <span aria-hidden="true">使う</span>
+              </span>
+              {# 色だけに頼らず、「選択中」の文字も出す #}
+              <span class="hidden group-has-[:checked]:inline-flex">{{ badge("選択中", "accent") }}</span>
+            </div>
+          </label>
+
+          {# カードの下の行（右）。ラベルの外に置く。チェックの状態と教材・範囲を、GETのクエリとして編集画面に引き継ぐ（JavaScriptなしで動く） #}
+          <div class="absolute bottom-2.5 right-4">
+            {{ btn_secondary("編集する", attrs={
+              "type": "submit",
+              "formaction": "/teacher/candidates/" ~ (c.candidate_id | urlencode) ~ "/edit",
+              "formmethod": "get",
+              "aria-label": c.name ~ "を編集する",
+            }) }}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {# 操作の行。左：教材を選び直す、右下：この内容で追加する #}
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    {{ btn_secondary("教材を選び直す", href=materials_url) }}
+    {% if candidates %}
+      {{ btn_primary("この内容で追加する", attrs={"type": "submit"}) }}
+    {% endif %}
+  </div>
+</form>
+
+<script>
+  // 選んだ数の表示を更新し、上限まで選んだら、選んでいないチェックボックスを押せなくする（文字は textContent で入れる）
+  // JavaScriptが動かないときも、上限を超えた送信は main.py が受け付けない
+  (() => {
+    const form = document.getElementById("candidates-form");
+    const count = document.getElementById("selected-count");
+    const limit = document.getElementById("selected-limit");
+    if (!form || !count) return;
+    const max = {{ select_max | int }};
+    const update = () => {
+      const boxes = form.querySelectorAll('input[name="selected"]');
+      const checked = form.querySelectorAll('input[name="selected"]:checked').length;
+      const full = checked >= max;
+      boxes.forEach((box) => { box.disabled = full && !box.checked; });
+      count.textContent = String(checked);
+      limit.textContent = full ? limit.dataset.text : "";
+    };
+    form.addEventListener("change", update);
+    // ブラウザの「戻る」で表示したときも、チェックの状態に合わせ直す
+    window.addEventListener("pageshow", update);
+    update();
+  })();
+</script>
+{% endblock %}

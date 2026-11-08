@@ -28,11 +28,11 @@
   {# 全画面で別の見た目にしたいページ（ログイン画面など）は、このブロックごと差し替える #}
   {% block body %}
   <header class="bg-paper border-b-2 border-accent">
-    <div class="max-w-5xl mx-auto px-6">
-      <a href="/" class="inline-flex items-center min-h-16 text-2xl font-bold">{{ app_name }}</a>
+    <div class="max-w-6xl mx-auto px-8">
+      <a href="/" class="inline-flex items-center min-h-14 text-2xl font-bold">{{ app_name }}</a>
     </div>
   </header>
-  <main class="max-w-5xl mx-auto px-6 py-10">
+  <main class="max-w-6xl mx-auto px-8 py-6">
     {% block content %}{% endblock %}
   </main>
   {% endblock %}

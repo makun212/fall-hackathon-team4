@@ -1,0 +1,48 @@
+{# 生徒がチャットの相手にするロールを選ぶ画面。roles は main.py の get_roles() から渡す #}
+{# タブレットの横画面（1180×820）で、スクロールせずにボタンまで見えるようにしている #}
+{# ロールが5件でも6件でも同じ見た目になるよう、ボタンはカードの一覧の外（下の行）に置く。3列×2段（6件）までが1画面に収まる #}
+{# 820 の高さに合わせて、カードの中の行の間・項目の間・余白を広めにしている。base.html・見出し・カードの中身を変えたら、高さを見直す #}
+{% extends "base.html" %}
+{% from "_components.html" import page_header, btn_primary, btn_secondary, radio_card, avatar %}
+
+{% block title %}ロールを選ぶ | {% endblock %}
+
+{% block content %}
+{{ page_header("ロールを選んでください") }}
+<p class="-mt-4 mb-5 text-muted">話し相手にする立場を1つ選んでください</p>
+
+<form action="/student/question" method="get" class="flex flex-col gap-6">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+    {% for role in roles %}
+      {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
+      {# summary は画面の高さに入りきらないため、この画面では表示しない（特徴で立場の違いを伝える） #}
+      {% set role_id = role["id"] %}
+      {% set role_name = role["name"] %}
+      {% set role_features = role["features"] %}
+      {% set role_image = role["image"] %}
+
+      {% call radio_card("role_id", role_id, required=True) %}
+        {# radio_card の余白（px-4 py-3）に、上下の余白を少し足す #}
+        <div class="flex flex-col gap-3 py-1">
+          <div class="flex items-center gap-3">
+            {{ avatar(role_name[:1], role_image) }}
+            <h2 class="pr-6 text-xl font-bold leading-snug">{{ role_name }}</h2>
+          </div>
+          {# 特徴は、行の間と項目の間を広めにして読みやすくする #}
+          <ul class="flex flex-col gap-1 list-disc pl-5 text-base leading-relaxed">
+            {% for feature in role_features %}
+              <li>{{ feature }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endcall %}
+    {% endfor %}
+  </div>
+
+  {# ボタンの行。タブレット横画面は、左：戻る、右：このロールで対話を始める。スマホ幅は縦に並べ、「このロールで対話を始める」を一番上にする #}
+  <div class="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">
+    {{ btn_secondary("戻る", href="/student") }}
+    {{ btn_primary("このロールで対話を始める") }}
+  </div>
+</form>
+{% endblock %}
