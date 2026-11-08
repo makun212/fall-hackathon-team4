@@ -1064,7 +1064,9 @@ def teacher_chat_detail(request: Request, conversation_id: str):
 # 生徒用のトップ（仮）
 @app.get("/student", response_class=HTMLResponse)
 def student_home(request: Request):
-    return templates.TemplateResponse(request, "student_home.html")
+    return templates.TemplateResponse(
+        request, "student_home.html", {"material_sets": get_confirmed_material_sets()}
+    )
 
 
 # 生徒用のロール選択画面
