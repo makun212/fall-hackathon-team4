@@ -666,7 +666,7 @@ def render_teacher_candidates(
 def read_material_set_records():
     # 確定済みの教材セットを、ダミーデータから取り出す。教材セットとロールのキー名を参照するのはここだけ
     # TODO（バックエンド担当）: 教材セットの保存ができたら、この関数の中身を、保存した教材セットを同じ形で読む処理に差し替える
-    # 形: id、title、range_start・range_end（第何段落か。1から数える）、paragraph_count、question、created_at、
+    # 形: id、title、author、range_start・range_end（第何段落か。1から数える）、paragraph_count、question、created_at、
     #     roles（name、features、image、edited の辞書のリスト。edited は教師が編集したかどうか）
     materials = {m["id"]: m for m in SEED_DATA.get("materials") or []}
     sources = {
@@ -707,6 +707,7 @@ def read_material_set_records():
             {
                 "id": ms["id"],
                 "title": ms.get("title_label") or material["title"],
+                "author": material.get("author") or "",
                 "range_start": paragraph_ids.index(range_["from"]) + 1,
                 "range_end": paragraph_ids.index(range_["to"]) + 1,
                 "paragraph_count": len(paragraph_ids),
@@ -731,6 +732,7 @@ def get_confirmed_material_sets():
             {
                 "id": r["id"],
                 "title": r["title"],
+                "author": r["author"],
                 "range_label": label,
                 "question": r["question"],
                 "created_label": f"{created.year}年{created.month}月{created.day}日",
@@ -785,10 +787,28 @@ def student_login(request: Request):
     return render_login(request, "student")
 
 
-# 教師用のトップ（仮）
+def render_teacher_home(request: Request, material_set_id: str, partial: bool = False):
+    # 教材セット選択の画面を返す。ID が見つからない・未指定のときは、1冊目（一覧の先頭）を選ぶ
+    # partial が True なら、htmx 用に、右の詳細と本棚（hx-swap-oob）だけを返す
+    material_sets = get_confirmed_material_sets()
+    selected = next((s for s in material_sets if s["id"] == material_set_id), None)
+    if selected is None and material_sets:
+        selected = material_sets[0]
+    response = templates.TemplateResponse(
+        request,
+        "teacher_home_detail.html" if partial else "teacher_home.html",
+        {"material_sets": material_sets, "selected": selected},
+    )
+    # 同じURLで、htmx かどうかによって返す中身が変わるため
+    response.headers["Vary"] = "HX-Request"
+    return response
+
+
+# 教師用のトップ：教材セット選択。?set= で選択中のセットを指定できる（共有・再読み込みのため）
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
 @app.get("/teacher", response_class=HTMLResponse)
-def teacher_home(request: Request):
-    return templates.TemplateResponse(request, "teacher_home.html")
+def teacher_home(request: Request, material_set_id: str = Query("", alias="set")):
+    return render_teacher_home(request, material_set_id)
 
 
 # 教師用：教材と使用範囲の選択画面。material_id は get_materials() にある、本文が登録済みのIDだけを選択中にする
@@ -978,6 +998,23 @@ def teacher_material_sets(request: Request):
     return templates.TemplateResponse(
         request, "teacher_material_sets.html", {"material_sets": get_confirmed_material_sets()}
     )
+
+
+# 教師用：教材セット選択で本を押したときの詳細。htmx からは詳細と本棚だけ、通常のアクセスでは画面全体を返す
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.get("/teacher/material-sets/{material_set_id}", response_class=HTMLResponse)
+def teacher_material_set_detail(request: Request, material_set_id: str):
+    is_htmx = request.headers.get("HX-Request") == "true"
+    return render_teacher_home(request, material_set_id, partial=is_htmx)
+
+
+# 教師用：教材セットの編集（準備中）。確定済みの教材セットの ID だけを受け付ける
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.get("/teacher/material-sets/{material_set_id}/edit", response_class=HTMLResponse)
+def teacher_material_set_edit(request: Request, material_set_id: str):
+    if material_set_id not in {s["id"] for s in get_confirmed_material_sets()}:
+        raise HTTPException(status_code=404, detail="教材セットが見つかりません")
+    return templates.TemplateResponse(request, "teacher_placeholder.html", {"heading": "セットを編集"})
 
 
 # 教師用：授業の画面（仮）。中身はまだない。確定済みの教材セットの ID だけを受け付ける

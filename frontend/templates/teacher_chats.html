@@ -1,6 +1,7 @@
 {# 教師用：生徒のチャット一覧。conversations / material_set_title / detected_count / total_count / only_detected は main.py から渡す #}
 {# 会話の各値は main.py の get_conversation_summaries() が作る。md 以上は表、md 未満はカードで、同じデータを見せる #}
-{% extends "base.html" %}
+{% extends "teacher_base.html" %}
+{% set nav_current = "chats" %}
 {% from "_components.html" import page_header, btn_secondary, badge %}
 
 {% block title %}生徒のチャット一覧 | {% endblock %}

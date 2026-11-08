@@ -1,0 +1,48 @@
+{# 教材セット選択の右側：選択中のセットの詳細（#set-detail の中身）。selected は main.py の render_teacher_home() から渡す #}
+{# selected: id、title、author、range_label、roles（name、image） #}
+
+{# 移動先は、ここだけで定義する #}
+{% set new_url = "/teacher/materials" %}
+{% macro edit_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/edit{% endmacro %}
+{% macro lesson_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/lesson{% endmacro %}
+
+{% if selected is none %}
+  <div class="flex flex-col items-start gap-4">
+    <p class="text-base text-sepia-muted">完成した教材セットは、まだありません。教材を選んで、ロールを決めると、本棚に並びます。</p>
+    <a href="{{ new_url }}" class="inline-flex items-center min-h-12 px-6 rounded-[10px] bg-crimson border-b-3 border-gold text-lg font-bold text-paper hover:bg-crimson-dark focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-crimson">教材セットを作る</a>
+  </div>
+{% else %}
+  <div class="flex flex-col gap-1.5">
+    <p class="text-sm font-bold text-crimson-dark">いま選んでいるセット</p>
+    <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 min-w-0">
+      <h2 class="font-serif text-3xl font-bold break-words">{{ selected.title }}</h2>
+      <p class="text-base text-sepia-muted">{% if selected.author %}{{ selected.author }}／{% endif %}{{ selected.range_label }}</p>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2.5">
+    <h3 class="text-base font-bold">ロール</h3>
+    <span class="px-2.5 py-0.5 rounded-full bg-rose-soft text-sm font-bold text-crimson-dark">{{ selected.roles | length }}個</span>
+  </div>
+
+  {% if selected.roles %}
+    <ul class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
+      {% for role in selected.roles %}
+        <li class="flex items-center gap-2.5 min-h-14 px-3.5 py-2 border border-cream-line rounded-[10px] bg-kinari">
+          <span class="relative shrink-0 flex items-center justify-center size-[30px] rounded-full overflow-hidden bg-crimson font-serif text-sm font-bold text-kinari" aria-hidden="true">
+            {{ role.name[:1] }}
+            {% if role.image %}<img src="/static/{{ role.image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">{% endif %}
+          </span>
+          <span class="min-w-0 text-base font-bold leading-tight break-words">{{ role.name }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-base text-sepia-muted">ロールは、まだありません。</p>
+  {% endif %}
+
+  <div class="mt-auto flex flex-wrap justify-end gap-3 pt-3">
+    <a href="{{ edit_url(selected) }}" class="inline-flex items-center min-h-[52px] px-6 border border-rose-line rounded-[10px] text-base font-bold text-crimson-dark hover:bg-rose-soft focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-crimson">セットを編集</a>
+    <a href="{{ lesson_url(selected) }}" class="inline-flex items-center min-h-[52px] px-10 rounded-[10px] bg-crimson border-b-3 border-gold text-lg font-bold tracking-[0.1em] text-paper hover:bg-crimson-dark focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-crimson">授業開始</a>
+  </div>
+{% endif %}

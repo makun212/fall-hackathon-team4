@@ -1,0 +1,58 @@
+{# 教材セット選択の本棚（#shelves）。material_sets と selected は main.py の render_teacher_home() から渡す #}
+{# oob が true のときは、htmx の hx-swap-oob で、詳細と一緒に本棚も差し替える（選択中の本の aria-pressed を更新するため） #}
+{# 本の1冊1冊が、セットを選ぶボタン。全冊同じ大きさで、違うのは色と題名だけ。選択中の本だけ持ち上がり、金の縁と影がつく #}
+
+{# 背表紙の色（背景・文字・上下の帯）。セットの並び順に、上から順に使う。足りなければ最初に戻る #}
+{% set spine_styles = [
+  {"bg": "bg-book-navy", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-crimson", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-book-green", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-book-brown", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-kinari", "text": "text-crimson", "band": "bg-crimson"},
+  {"bg": "bg-book-lemon", "text": "text-sepia", "band": "bg-crimson-dark"},
+  {"bg": "bg-book-indigo", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-crimson-dark", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-book-blue", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-sepia-muted", "text": "text-kinari", "band": "bg-gold"},
+] %}
+
+{# 1段に5冊。セットが少なくても、棚は2段は見せる #}
+{% set books_per_row = 5 %}
+{% set rows = material_sets | batch(books_per_row) | list %}
+{% set row_count = [2, rows | length] | max %}
+
+<section id="shelves"{% if oob %} hx-swap-oob="true"{% endif %} aria-labelledby="shelves-title" class="w-full lg:w-[440px] lg:flex-none p-3 bg-wood rounded-[10px]">
+  {# 本棚の看板。ボタンではない #}
+  <div class="flex items-center justify-between gap-2.5 px-1.5 pt-1 pb-3">
+    <h2 id="shelves-title" class="font-serif text-lg font-bold tracking-[0.1em] text-kinari">完成したセット</h2>
+    <span class="px-3 py-0.5 border border-gold rounded-full text-sm font-bold text-kinari">{{ material_sets | length }}冊</span>
+  </div>
+
+  {% for i in range(row_count) %}
+    {% set row = rows[i] if i < rows | length else [] %}
+    <div class="bg-wood-dark rounded px-3.5 pt-4{% if not loop.first %} mt-2.5{% endif %}">
+      {# 上の余白は、選択中の本が持ち上がる分 #}
+      <div class="flex items-end gap-2 xs:gap-2.5 h-44 xs:h-52 px-1.5">
+        {% for ms in row %}
+          {% set style = spine_styles[(i * books_per_row + loop.index0) % spine_styles | length] %}
+          {% set is_selected = selected is not none and ms.id == selected.id %}
+          <button type="button"
+                  id="book-{{ ms.id }}"
+                  aria-pressed="{{ 'true' if is_selected else 'false' }}"
+                  aria-label="{{ ms.title }}{% if ms.author %}（{{ ms.author }}）{% endif %}を選ぶ"
+                  hx-get="/teacher/material-sets/{{ ms.id | urlencode }}"
+                  hx-target="#set-detail"
+                  hx-swap="innerHTML"
+                  hx-push-url="/teacher?set={{ ms.id | urlencode }}"
+                  class="flex-1 min-w-10 max-w-14 h-36 xs:flex-none xs:w-14 xs:h-44 p-0 flex flex-col items-center justify-between overflow-hidden rounded-t-[3px] rounded-b-[2px] cursor-pointer transition duration-200 ease-in-out motion-reduce:transition-none not-aria-pressed:hover:-translate-y-1.5 aria-pressed:-translate-y-4 aria-pressed:ring-2 aria-pressed:ring-gold aria-pressed:shadow-[0_8px_10px_rgb(0_0_0/0.35)] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-kinari {{ style.bg }}">
+            <span class="w-full h-[7px] shrink-0 {{ style.band }}" aria-hidden="true"></span>
+            <span class="[writing-mode:vertical-rl] max-h-full overflow-hidden tracking-[0.18em] font-serif text-base font-bold {{ style.text }}" aria-hidden="true">{{ ms.title }}</span>
+            <span class="w-full h-[7px] shrink-0 {{ style.band }}" aria-hidden="true"></span>
+          </button>
+        {% endfor %}
+      </div>
+      {# 棚板 #}
+      <div class="h-3.5 -mx-3.5 bg-wood-light shadow-[0_3px_0_var(--color-wood-shadow)]" aria-hidden="true"></div>
+    </div>
+  {% endfor %}
+</section>

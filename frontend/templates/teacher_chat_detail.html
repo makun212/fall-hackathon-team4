@@ -1,6 +1,7 @@
 {# 教師用：チャット閲覧画面（仮）。conversation は main.py の find_conversation_summary() から渡す #}
 {# 次のissue「チャット閲覧画面と検知結果の表示」で、この画面を本物に置き換える #}
-{% extends "base.html" %}
+{% extends "teacher_base.html" %}
+{% set nav_current = "chats" %}
 {% from "_components.html" import page_header, btn_secondary %}
 
 {% block title %}{{ conversation.student_name }}さんの会話 | {% endblock %}
