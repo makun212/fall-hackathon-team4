@@ -1,0 +1,101 @@
+{# ウェルカム画面の飾り（8つ）。すべて装飾なので aria-hidden。座標・回転・遅延は参照HTML（案F）の値のまま #}
+{# 色と動き（animate-fly / animate-bob）は welcome.html の @theme で定義している #}
+
+{# 1つ分の枠。pos は位置と、タブレット幅で縮小するときの基準点。sx/sy/sr は飛んでくる前の位置と角度、r は止まったときの角度、d は遅れ #}
+{% macro _obj(pos, sx, sy, sr, r, d) %}
+<div class="absolute z-[1] hidden md:block rotate-(--r) max-lg:scale-75 animate-fly motion-reduce:animate-none {{ pos }}"
+     style="--sx: {{ sx }}; --sy: {{ sy }}; --sr: {{ sr }}; --r: {{ r }}; --d: {{ d }}" aria-hidden="true">
+  <div class="animate-bob motion-reduce:animate-none">{{ caller() }}</div>
+</div>
+{% endmacro %}
+
+{% macro login_objects() %}
+{# 巻物 #}
+{% call _obj("left-[6%] top-[110px] max-lg:origin-top-left", "-700px", "0px", "-35deg", "-9deg", "0.1s") %}
+<svg width="230" height="84" viewBox="0 0 230 84" class="block">
+  <rect x="16" y="14" width="198" height="56" class="fill-login-cream"/>
+  <rect x="16" y="14" width="198" height="56" fill="none" class="stroke-login-gold" stroke-width="1.5"/>
+  <path d="M44 28v26M58 28v18M72 28v30M86 28v22M100 28v28M114 28v16M128 28v30M142 28v24M156 28v20M170 28v28M184 28v22" class="stroke-login-scroll-text" stroke-width="2" stroke-linecap="round"/>
+  <rect x="4" y="6" width="16" height="72" rx="6" class="fill-login-wood"/>
+  <rect x="1" y="1" width="22" height="8" rx="3" class="fill-login-gold"/>
+  <rect x="1" y="75" width="22" height="8" rx="3" class="fill-login-gold"/>
+  <rect x="210" y="6" width="16" height="72" rx="6" class="fill-login-wood"/>
+  <rect x="207" y="1" width="22" height="8" rx="3" class="fill-login-gold"/>
+  <rect x="207" y="75" width="22" height="8" rx="3" class="fill-login-gold"/>
+</svg>
+{% endcall %}
+
+{# 原稿用紙 #}
+{% call _obj("left-[12%] top-[262px] max-lg:origin-top-left", "-700px", "120px", "20deg", "-5deg", "0.35s") %}
+<svg width="120" height="160" viewBox="0 0 120 160" class="block">
+  <rect width="120" height="160" class="fill-login-cream"/>
+  <path d="M10 10V150M26 10V150M42 10V150M58 10V150M74 10V150M90 10V150M106 10V150M10 10H106M10 27.5H106M10 45H106M10 62.5H106M10 80H106M10 97.5H106M10 115H106M10 132.5H106M10 150H106" class="stroke-login-grid" stroke-width="1" fill="none"/>
+  <path d="M99 14h10M104 10v22M99 49h10M104 45v18M83 31h10M88 27v20" class="stroke-login-sumi" stroke-width="2" stroke-linecap="round"/>
+</svg>
+{% endcall %}
+
+{# 硯 #}
+{% call _obj("left-[7%] top-[490px] max-lg:origin-top-left", "-400px", "600px", "15deg", "4deg", "0.55s") %}
+<svg width="170" height="100" viewBox="0 0 170 100" class="block">
+  <rect x="4" y="26" width="162" height="68" rx="14" class="fill-login-stone"/>
+  <rect x="4" y="26" width="162" height="10" rx="5" class="fill-login-stone-top"/>
+  <ellipse cx="62" cy="62" rx="40" ry="18" class="fill-login-stone-pool"/>
+  <g transform="rotate(-14 130 40)"><rect x="104" y="12" width="56" height="16" rx="2" class="fill-login-inkstick"/><rect x="104" y="12" width="56" height="3" class="fill-login-gold"/></g>
+</svg>
+{% endcall %}
+
+{# 和綴じの本 #}
+{% call _obj("right-[9%] top-[80px] max-lg:origin-top-right", "300px", "-600px", "30deg", "8deg", "0.2s") %}
+<svg width="130" height="180" viewBox="0 0 130 180" class="block">
+  <rect x="6" y="6" width="116" height="168" rx="5" class="fill-ink"/>
+  <rect x="6" y="6" width="116" height="168" rx="5" fill="none" class="stroke-login-gold" stroke-width="1.5"/>
+  <path d="M20 14V166" class="stroke-login-gold" stroke-width="2" stroke-dasharray="7 6"/>
+  <rect x="52" y="26" width="38" height="104" class="fill-login-cream"/>
+  <text x="71" y="64" font-size="26" text-anchor="middle" font-weight="700" class="font-login-serif fill-login-crimson">国</text>
+  <text x="71" y="102" font-size="26" text-anchor="middle" font-weight="700" class="font-login-serif fill-login-crimson">語</text>
+</svg>
+{% endcall %}
+
+{# 筆 #}
+{% call _obj("right-[6%] top-[320px] max-lg:origin-top-right", "700px", "0px", "80deg", "28deg", "0.45s") %}
+<svg width="60" height="230" viewBox="0 0 60 230" class="block">
+  <rect x="24" y="4" width="12" height="124" rx="6" class="fill-login-wood-dark"/>
+  <rect x="23" y="100" width="14" height="6" class="fill-login-gold"/>
+  <rect x="22" y="128" width="16" height="12" class="fill-login-gold"/>
+  <path d="M22 140H38C41 172 37 204 30 226C23 204 19 172 22 140Z" class="fill-login-sumi"/>
+</svg>
+{% endcall %}
+
+{# 短冊（金・よみより） #}
+{% call _obj("left-[36%] top-[24px] max-lg:origin-top", "0px", "-500px", "-20deg", "5deg", "0.3s") %}
+<svg width="44" height="150" viewBox="0 0 44 150" class="block">
+  <rect width="44" height="150" class="fill-login-cream"/>
+  <path d="M0 0H44V22H0Z" class="fill-login-gold"/>
+  <circle cx="22" cy="10" r="3" class="fill-login-crimson"/>
+  <g font-size="20" text-anchor="middle" font-weight="600" class="font-login-serif fill-ink">
+    <text x="22" y="56">よ</text><text x="22" y="82">み</text><text x="22" y="108">よ</text><text x="22" y="134">り</text>
+  </g>
+</svg>
+{% endcall %}
+
+{# 短冊（桃・国語） #}
+{% call _obj("right-[25%] bottom-[20px] max-lg:origin-bottom", "0px", "600px", "25deg", "-6deg", "0.6s") %}
+<svg width="44" height="150" viewBox="0 0 44 150" class="block">
+  <rect width="44" height="150" class="fill-login-cream"/>
+  <path d="M0 0H44V22H0Z" class="fill-login-pink"/>
+  <circle cx="22" cy="10" r="3" class="fill-login-crimson"/>
+  <g font-size="22" text-anchor="middle" font-weight="600" class="font-login-serif fill-ink">
+    <text x="22" y="64">国</text><text x="22" y="96">語</text>
+  </g>
+</svg>
+{% endcall %}
+
+{# 朱印（読） #}
+{% call _obj("left-[41%] bottom-[36px] max-lg:origin-bottom", "0px", "400px", "90deg", "-6deg", "0.7s") %}
+<svg width="56" height="56" viewBox="0 0 56 56" class="block">
+  <rect width="56" height="56" rx="4" class="fill-login-cream"/>
+  <rect x="4" y="4" width="48" height="48" rx="2" fill="none" class="stroke-login-crimson" stroke-width="2"/>
+  <text x="28" y="40" font-size="32" text-anchor="middle" font-weight="700" class="font-login-serif fill-login-crimson">読</text>
+</svg>
+{% endcall %}
+{% endmacro %}

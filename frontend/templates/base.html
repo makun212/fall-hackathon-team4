@@ -22,10 +22,11 @@
       --font-sans: "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
     }
   </style>
+  {% block head %}{% endblock %}
 </head>
 <body class="bg-paper text-ink font-sans text-lg leading-relaxed min-h-screen">
-  {# 横幅・高さは、タブレットの横画面（1180×820、Safari の表示領域は約1180×740）に合わせている #}
-  {# ヘッダーの高さ（56px＋線2px）と main の上の余白（24px）を変えたら、index.html の高さの計算も直す #}
+  {# 全画面で別の見た目にしたいページ（ログイン画面など）は、このブロックごと差し替える #}
+  {% block body %}
   <header class="bg-paper border-b-2 border-accent">
     <div class="max-w-6xl mx-auto px-8">
       <a href="/" class="inline-flex items-center min-h-14 text-2xl font-bold">{{ app_name }}</a>
@@ -34,5 +35,6 @@
   <main class="max-w-6xl mx-auto px-8 py-6">
     {% block content %}{% endblock %}
   </main>
+  {% endblock %}
 </body>
 </html>
