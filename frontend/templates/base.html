@@ -47,10 +47,13 @@
       --breakpoint-xs: 30rem;         /* 480px。本棚の本の大きさを切り替える */
     }
   </style>
+  {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}bg-paper text-ink{% endblock %} font-sans text-lg leading-relaxed min-h-screen">
   {# 横幅・高さは、タブレットの横画面（1180×820、Safari の表示領域は約1180×740）に合わせている #}
   {# ヘッダーの高さ（56px＋線2px）と main の上の余白（24px）を変えたら、index.html の高さの計算も直す #}
+  {# 全画面で別の見た目にしたいページ（ウェルカム画面など）は、body ブロックごと差し替える #}
+  {% block body %}
   {# 教師用の画面は teacher_base.html で、このヘッダーを差し替える #}
   {% block header %}
   <header class="bg-paper border-b-2 border-accent">
@@ -62,5 +65,6 @@
   <main class="max-w-6xl mx-auto px-8 py-6">
     {% block content %}{% endblock %}
   </main>
+  {% endblock %}
 </body>
 </html>
