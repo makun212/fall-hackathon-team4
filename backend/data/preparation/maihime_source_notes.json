@@ -1,5 +1,5 @@
 {
-    "preparation_status":  "未接続の準備用データ。行番号・概要・章番号は未定義。DB登録は未実施。",
+    "preparation_status":  "未接続の準備用データ。概要の保存先はmaterial.opening_previewに確定済み。行番号はIssue #44との調整まで保留。章番号は未定義。DB登録は未実施。",
     "source":  {
                    "card_url":  "https://www.aozora.gr.jp/cards/000129/card2078.html",
                    "text_url":  "https://www.aozora.gr.jp/cards/000129/files/2078_15963.html",
@@ -26,7 +26,7 @@
                                                ],
                        "indentation_preserved":  true,
                        "line_number_definition":  "未確定",
-                       "summary_storage":  "未確定"
+                       "summary_storage":  "material.opening_preview"
                    },
     "ending_date":  {
                         "text":  "（明治二十三年一月）",
