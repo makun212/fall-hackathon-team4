@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+import chat as chat_service
+from ai import AIBusyError, AIError
 from content import apply_maihime
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -1125,7 +1127,9 @@ def student_chat(request: Request, role_id: str | None = None):
     role = find_role(role_id)
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
-    return templates.TemplateResponse(request, "index.html", {"role": role})
+    return templates.TemplateResponse(
+        request, "index.html", {"role": role, "conversation_id": chat_service.new_conversation_id()}
+    )
 
 
 # 生徒用：対話後の感想入力画面。role_id は get_roles() にあるIDだけを受け付ける
@@ -1170,16 +1174,36 @@ def student_finish(request: Request):
     return templates.TemplateResponse(request, "student_finish.html")
 
 
+def get_material_text(material_id: str):
+    # AIに渡す本文。段落ごとに [p001] のような段落IDを付ける（AIが根拠の場所を示せるように）
+    # TODO: 教材セットの使用範囲が生徒の画面まで届くようになったら、その範囲の段落だけにする
+    for m in SEED_DATA.get("materials") or []:
+        if m["id"] == material_id:
+            return "\n\n".join(f"[{p['id']}]\n{p['text']}" for p in m.get("paragraphs") or [])
+    return ""
+
+
 @app.post("/chat", response_class=HTMLResponse)
 def chat(
     request: Request,
     message: str = Form(..., max_length=200),
     role_id: str | None = Form(None),
+    conversation_id: str | None = Form(None),
 ):
-    # role_id はチャット画面のフォームから届く。見つからなければ None（アイコンは「AI」になる）
+    # role_id と conversation_id は、チャット画面（/student/chat?role_id=...）のフォームから届く
     role = find_role(role_id) if role_id else None
-    # TODO: ここをAIのAPI呼び出しに置き換える
-    reply = f"（ダミー）「{message}」について、{role['name'] if role else '読者'}の立場から答えます。"
+    text = message.strip()
+    if role is None or not text or not chat_service.is_valid_conversation_id(conversation_id):
+        raise HTTPException(status_code=400)
+
+    material_text = get_material_text(SEED_DATA["preset_roles"]["material_id"])
+    try:
+        reply = chat_service.reply(conversation_id, role, material_text, text)
+    except AIBusyError:
+        # 画面は、状態コードを見て決まった文を出す（index.html の MESSAGES）
+        raise HTTPException(status_code=429)
+    except AIError:
+        raise HTTPException(status_code=502)
     return templates.TemplateResponse(
         request,
         "_message.html",
