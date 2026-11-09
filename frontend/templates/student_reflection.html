@@ -19,6 +19,7 @@
   {# フォームの送信先は、ここだけで定義する #}
   <form id="reflection-form" action="/student/reflection" method="post" class="flex flex-col gap-6">
     <input type="hidden" name="role_id" value="{{ role_id }}">
+    {% if conversation_id %}<input type="hidden" name="conversation_id" value="{{ conversation_id }}">{% endif %}
 
     {# タブレット横画面（md以上）は「前の考え → 後の考え」の2列。スマホ幅は縦に並べ、矢印は下向きに回す #}
     <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-4 md:gap-6 items-start">
@@ -54,7 +55,7 @@
     <p id="reflection-note" class="text-base text-muted">送信すると、先生に届きます。送信したあとは、書き直せません。</p>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
-      {{ btn_secondary("もう一度対話", href="/student/chat?role_id=" ~ role_id|urlencode) }}
+      {{ btn_secondary("もう一度対話", href="/student/chat?role_id=" ~ role_id|urlencode ~ ("&conversation_id=" ~ conversation_id|urlencode if conversation_id else "")) }}
       {{ btn_primary("送信する", busy_label="送信中…") }}
     </div>
   </form>

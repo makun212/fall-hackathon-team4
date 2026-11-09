@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import chat as chat_service
+import db
 from ai import AIBusyError, AIError
 from content import apply_maihime
 
@@ -91,15 +92,29 @@ REFLECTION_MAX_LENGTH = 200
 
 
 # ダミー。事前の意見の保存ができたら、ログイン中の生徒の保存済みの値に差し替える
-def get_pre_opinion(role_id: str):
-    # 対話前の考えを取り出すのは、この関数1か所だけ
+def find_conversation(conversation_id, role):
+    # 会話 ID が正しい形で、DBにあり、ロールも一致するときだけ会話を返す。それ以外は None
+    if not chat_service.is_valid_conversation_id(conversation_id):
+        return None
+    conversation = db.get_conversation(conversation_id)
+    if conversation is None or conversation["role_id"] != role["id"]:
+        return None
+    return conversation
+
+
+def get_pre_opinion(conversation):
+    # 対話前の考えを取り出すのは、この関数1か所だけ。会話がなければダミーデータを使う
+    if conversation and conversation.get("pre_opinion"):
+        return conversation["pre_opinion"]
     reflections = SEED_DATA.get("reflections") or []
     if not reflections:
         return "（対話の前の考えが見つかりません）"
     return reflections[0]["pre_opinion"]
 
 
-def render_student_reflection(request: Request, role, reflection: str = "", error: str | None = None, status_code: int = 200):
+def render_student_reflection(
+    request: Request, role, conversation=None, reflection: str = "", error: str | None = None, status_code: int = 200
+):
     # 感想入力画面を返す（GET と、POST の入力エラーで共用）
     return templates.TemplateResponse(
         request,
@@ -107,7 +122,8 @@ def render_student_reflection(request: Request, role, reflection: str = "", erro
         {
             "role": role,
             "question": get_question(),
-            "pre_opinion": get_pre_opinion(role["id"]),
+            "pre_opinion": get_pre_opinion(conversation),
+            "conversation_id": conversation["id"] if conversation else None,
             "reflection": reflection,
             "error": error,
             "reflection_max_length": REFLECTION_MAX_LENGTH,
@@ -130,10 +146,10 @@ DETECTION_LEVEL_RANK = {"low": 1, "medium": 2, "high": 3}
 
 
 def read_chat_records():
-    # 一覧に使うデータを、ダミーデータから取り出す。キー名を参照するのはここだけ
-    # DBに変えるときは、この関数の中身だけを、DBから同じ形で読む処理に差し替える
+    # 一覧に使うデータを、ダミーデータとDBから取り出す。ダミーデータのキー名を参照するのはここだけ
+    # デモで一覧が空にならないように、ダミーの会話の後ろに、DBの本物の会話を足す
     data = SEED_DATA
-    return {
+    records = {
         "conversations": [
             {
                 "id": c["id"],
@@ -163,6 +179,12 @@ def read_chat_records():
             for d in data["detections"]
         ],
     }
+    from_db = db.read_chat_records()
+    records["conversations"] += from_db["conversations"]
+    records["messages"] += from_db["messages"]
+    # Googleログイン（#33）の前は、DBの会話に生徒がいないので「ゲスト」と出す
+    records["user_names"][None] = "ゲスト"
+    return records
 
 
 def get_material_set_title(material_set_id: str):
@@ -1113,32 +1135,37 @@ def student_question_submit(
         # 入力した文章は消さずに、入力欄に戻す
         return render_student_question(request, role, opinion=opinion, error=error, status_code=422)
 
-    # TODO: ここで、事前の意見を保存する（バックエンド担当が、DBの導入後に作る）
+    # 対話前の考えを保存して、会話を始める（#46）
+    conversation_id = chat_service.new_conversation_id()
+    db.create_conversation(conversation_id, role["id"], text)
 
-    # リダイレクト先は、ユーザーの入力ではなく、検証したロールのIDから組み立てる
-    return RedirectResponse(f"/student/chat?role_id={role['id']}", status_code=303)
+    # リダイレクト先は、ユーザーの入力ではなく、検証したロールのIDと、作った会話 ID から組み立てる
+    return RedirectResponse(
+        f"/student/chat?role_id={role['id']}&conversation_id={conversation_id}", status_code=303
+    )
 
 
 # 既存のチャット画面。role_id があれば、選んだロールを表示する
 @app.get("/student/chat", response_class=HTMLResponse)
-def student_chat(request: Request, role_id: str | None = None):
+def student_chat(request: Request, role_id: str | None = None, conversation_id: str | None = None):
     if role_id is None:
         return templates.TemplateResponse(request, "index.html")
     role = find_role(role_id)
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
-    return templates.TemplateResponse(
-        request, "index.html", {"role": role, "conversation_id": chat_service.new_conversation_id()}
-    )
+    # 問いかけ画面から来たときは、その会話を続ける。なければ新しい会話にする
+    conversation = find_conversation(conversation_id, role)
+    conversation_id = conversation["id"] if conversation else chat_service.new_conversation_id()
+    return templates.TemplateResponse(request, "index.html", {"role": role, "conversation_id": conversation_id})
 
 
 # 生徒用：対話後の感想入力画面。role_id は get_roles() にあるIDだけを受け付ける
 @app.get("/student/reflection", response_class=HTMLResponse)
-def student_reflection(request: Request, role_id: str | None = None):
+def student_reflection(request: Request, role_id: str | None = None, conversation_id: str | None = None):
     role = find_role(role_id) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
-    return render_student_reflection(request, role)
+    return render_student_reflection(request, role, find_conversation(conversation_id, role))
 
 
 # 生徒用：感想入力画面のフォームの送信先。正しければ終了画面へ進む
@@ -1147,10 +1174,12 @@ def student_reflection_submit(
     request: Request,
     role_id: str = Form(""),
     reflection: str = Form(""),
+    conversation_id: str = Form(""),
 ):
     role = find_role(role_id) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
+    conversation = find_conversation(conversation_id, role)
 
     # ブラウザは送信時に改行を「\r\n」（2文字）にするため、画面の maxlength と数え方をそろえる
     text = reflection.replace("\r\n", "\n").strip()
@@ -1161,9 +1190,14 @@ def student_reflection_submit(
         error = f"文章が長すぎます。{REFLECTION_MAX_LENGTH}文字以内にしてください。"
     if error:
         # 入力した文章は消さずに、入力欄に戻す
-        return render_student_reflection(request, role, reflection=reflection, error=error, status_code=422)
+        return render_student_reflection(
+            request, role, conversation, reflection=reflection, error=error, status_code=422
+        )
 
-    # TODO: ここで、対話後の意見を保存し、教師に届くようにする。保存後は、書き換えられないようにする
+    # 対話後の感想を保存する（#46）。すでに保存した会話は書き換えない（save_reflection が何もしない）
+    # TODO: 教師の画面に届くようにする（教師のチャット一覧を DB から読むようにしたとき）
+    if conversation:
+        db.save_reflection(conversation["id"], text)
 
     return RedirectResponse("/student/finish", status_code=303)
 
@@ -1194,6 +1228,10 @@ def chat(
     role = find_role(role_id) if role_id else None
     text = message.strip()
     if role is None or not text or not chat_service.is_valid_conversation_id(conversation_id):
+        raise HTTPException(status_code=400)
+    # すでにある会話は、同じロールでしか続けられない（ほかのロールの会話に混ぜない）
+    existing = db.get_conversation(conversation_id)
+    if existing is not None and existing["role_id"] != role["id"]:
         raise HTTPException(status_code=400)
 
     material_text = get_material_text(SEED_DATA["preset_roles"]["material_id"])

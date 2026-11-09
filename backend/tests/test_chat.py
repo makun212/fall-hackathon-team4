@@ -8,10 +8,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
 from google.genai import errors  # noqa: E402
 
 import ai  # noqa: E402
 import chat  # noqa: E402
+import db  # noqa: E402
 import main  # noqa: E402
 
 
@@ -39,6 +42,8 @@ class FakeClient:
 
 class ChatTests(unittest.TestCase):
     def setUp(self):
+        # テストごとに、メモリ上の空のDBを使う
+        db.use_engine(create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}))
         self.client = FakeClient()
         ai._client = self.client
         self.app = TestClient(main.app)
@@ -78,7 +83,15 @@ class ChatTests(unittest.TestCase):
         for i in range(15):
             self.send(f"発言{i}")
         self.assertEqual(chat.HISTORY_MAX, len(chat.read_history(self.conversation_id)))
+        self.assertEqual(("user", "発言14"), self.client.models.calls[-1]["contents"][-1])
         self.assertEqual(chat.HISTORY_MAX + 1, len(self.client.models.calls[-1]["contents"]))
+
+    def test_conversations_are_separate(self):
+        self.send("A の発言")
+        other = self.app.get("/student/chat?role_id=r002").text
+        other_id = re.search(r'name="conversation_id" value="([0-9a-f]{32})"', other).group(1)
+        self.send("B の発言", conversation_id=other_id)
+        self.assertEqual([("user", "B の発言")], self.client.models.calls[-1]["contents"])
 
     def test_message_is_escaped(self):
         self.assertIn("&lt;script&gt;", self.send("<script>").text)
