@@ -24,7 +24,7 @@ class FakeModels:
 
     def generate_content(self, model, contents, config):
         self.calls.append(config.system_instruction)
-        return type("Response", (), {"text": "返事"})()
+        return type("Response", (), {"text": '{"reply": "返事", "evidence": []}'})()
 
 
 class StudentMaterialSetTests(unittest.TestCase):

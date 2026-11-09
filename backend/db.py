@@ -50,6 +50,7 @@ chat_messages = Table(
     Column("conversation_id", String(32), ForeignKey("conversations.id"), nullable=False, index=True),
     Column("role", String(16), nullable=False),
     Column("content", Text, nullable=False),
+    Column("evidence", JSON),  # AIの返事の根拠 [{quote_text, location}]（#45）
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
@@ -176,7 +177,16 @@ def save_messages(conversation_id: str, role_id: str, messages):
             conn.execute(insert(conversations).values(id=conversation_id, role_id=role_id, created_at=created))
         conn.execute(
             insert(chat_messages),
-            [{"conversation_id": conversation_id, "role": m["role"], "content": m["content"], "created_at": created} for m in messages],
+            [
+                {
+                    "conversation_id": conversation_id,
+                    "role": m["role"],
+                    "content": m["content"],
+                    "evidence": m.get("evidence"),
+                    "created_at": created,
+                }
+                for m in messages
+            ],
         )
 
 

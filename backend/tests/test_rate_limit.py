@@ -42,7 +42,7 @@ class RateLimiterTests(unittest.TestCase):
 
 class FakeModels:
     def generate_content(self, model, contents, config):
-        return type("Response", (), {"text": "返事"})()
+        return type("Response", (), {"text": '{"reply": "返事", "evidence": []}'})()
 
 
 class ChatRateLimitTests(unittest.TestCase):

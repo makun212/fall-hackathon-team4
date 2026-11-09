@@ -1301,6 +1301,15 @@ def get_material_text(material_id: str, range_start: int | None = None, range_en
     return ""
 
 
+def get_paragraph_labels():
+    # 根拠の場所の表示名 {段落ID: "第3段落"}。段落の番号は、教材の中で1から数える
+    return {
+        p["id"]: f"第{i}段落"
+        for m in SEED_DATA.get("materials") or []
+        for i, p in enumerate(m.get("paragraphs") or [], start=1)
+    }
+
+
 def find_role_source(role_id: str):
     # プリセットのロールか、AIの候補から、元のロールを探す。なければ None
     for role in (SEED_DATA.get("preset_roles") or {}).get("roles") or []:
@@ -1367,7 +1376,7 @@ def chat(
     else:
         material_text = get_material_text(SEED_DATA["preset_roles"]["material_id"])
     try:
-        reply = chat_service.reply(conversation_id, role, material_text, text)
+        reply, evidence = chat_service.reply(conversation_id, role, material_text, text, get_paragraph_labels())
     except AIBusyError:
         # 画面は、状態コードを見て決まった文を出す（index.html の MESSAGES）
         raise HTTPException(status_code=429)
@@ -1376,7 +1385,7 @@ def chat(
     return templates.TemplateResponse(
         request,
         "_message.html",
-        {"user_message": message, "reply": reply, "role": role},
+        {"user_message": message, "reply": reply, "role": role, "evidence": evidence},
     )
 
 
