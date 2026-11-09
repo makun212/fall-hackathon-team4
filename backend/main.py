@@ -146,10 +146,10 @@ DETECTION_LEVEL_RANK = {"low": 1, "medium": 2, "high": 3}
 
 
 def read_chat_records():
-    # 一覧に使うデータを、ダミーデータから取り出す。キー名を参照するのはここだけ
-    # DBに変えるときは、この関数の中身だけを、DBから同じ形で読む処理に差し替える
+    # 一覧に使うデータを、ダミーデータとDBから取り出す。ダミーデータのキー名を参照するのはここだけ
+    # デモで一覧が空にならないように、ダミーの会話の後ろに、DBの本物の会話を足す
     data = SEED_DATA
-    return {
+    records = {
         "conversations": [
             {
                 "id": c["id"],
@@ -179,6 +179,12 @@ def read_chat_records():
             for d in data["detections"]
         ],
     }
+    from_db = db.read_chat_records()
+    records["conversations"] += from_db["conversations"]
+    records["messages"] += from_db["messages"]
+    # Googleログイン（#33）の前は、DBの会話に生徒がいないので「ゲスト」と出す
+    records["user_names"][None] = "ゲスト"
+    return records
 
 
 def get_material_set_title(material_set_id: str):

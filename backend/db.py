@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -131,3 +131,44 @@ def save_messages(conversation_id: str, role_id: str, messages):
             insert(chat_messages),
             [{"conversation_id": conversation_id, "role": m["role"], "content": m["content"], "created_at": created} for m in messages],
         )
+
+
+# ---- 教師用：チャット一覧（#20） ----
+
+JST = timezone(timedelta(hours=9))
+
+
+def to_jst_text(value):
+    # DBの日時を、ダミーデータと同じ「2026-11-04T10:15:00+09:00」の形にする
+    # SQLite はタイムゾーンを保存しないので、タイムゾーンがなければ UTC として扱う
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(JST).isoformat(timespec="seconds")
+
+
+def read_chat_records():
+    # 教師のチャット一覧に使う、DBの会話と発言。main.py の read_chat_records() と同じキー名で返す
+    with get_engine().connect() as conn:
+        conversation_rows = conn.execute(select(conversations).order_by(conversations.c.created_at)).all()
+        message_rows = conn.execute(select(chat_messages).order_by(chat_messages.c.id)).all()
+    return {
+        "conversations": [
+            {
+                "id": c.id,
+                "material_set_id": c.material_set_id,
+                "student_id": c.student_id,
+                "role_id": c.role_id,
+                "created_at": to_jst_text(c.created_at),
+            }
+            for c in conversation_rows
+        ],
+        "messages": [
+            {
+                "id": f"db{m.id}",
+                "conversation_id": m.conversation_id,
+                "text": m.content,
+                "sent_at": to_jst_text(m.created_at),
+            }
+            for m in message_rows
+        ],
+    }
