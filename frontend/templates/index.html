@@ -8,7 +8,7 @@
 {% set role_id = role["id"] if role else None %}
 {% set role_image = role["image"] if role else None %}
 {# 感想入力の画面への移動先は、ここだけで定義する #}
-{% set reflection_url = "/student/reflection?role_id=" ~ role_id|urlencode if role_id else None %}
+{% set reflection_url = "/student/reflection?role_id=" ~ role_id|urlencode ~ ("&conversation_id=" ~ conversation_id|urlencode if conversation_id else "") if role_id else None %}
 
 {% block title %}チャット | {% endblock %}
 

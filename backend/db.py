@@ -16,6 +16,7 @@ from sqlalchemy import (
     event,
     insert,
     select,
+    update,
 )
 
 # DB（#12）。テーブルの定義と、DBへの接続はこのファイルにまとめる
@@ -33,6 +34,9 @@ conversations = Table(
     Column("role_id", String(64), nullable=False),
     Column("student_id", String(64)),  # Googleログイン（#33）ができたら入れる
     Column("material_set_id", String(64)),  # 教材セットが生徒の画面まで届いたら入れる
+    Column("pre_opinion", Text),  # 対話前の考え（#46）
+    Column("reflection", Text),  # 対話後の感想（#46）。一度保存したら書き換えない
+    Column("reflected_at", DateTime(timezone=True)),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
@@ -74,7 +78,33 @@ def use_engine(engine):
     metadata.create_all(_engine)
 
 
-# ---- 会話（#20） ----
+# ---- 会話（#20）と、対話前の考え・感想（#46） ----
+
+
+def create_conversation(conversation_id: str, role_id: str, pre_opinion: str):
+    # 対話前の考えを送ったときに、会話を1件作る
+    with get_engine().begin() as conn:
+        conn.execute(
+            insert(conversations).values(id=conversation_id, role_id=role_id, pre_opinion=pre_opinion, created_at=now())
+        )
+
+
+def get_conversation(conversation_id: str):
+    # 会話1件を辞書で返す。なければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(select(conversations).where(conversations.c.id == conversation_id)).first()
+    return dict(row._mapping) if row else None
+
+
+def save_reflection(conversation_id: str, reflection: str) -> bool:
+    # 感想を保存する。まだ感想がない会話だけを更新し、保存できたら True（書き換えはしない）
+    with get_engine().begin() as conn:
+        result = conn.execute(
+            update(conversations)
+            .where(conversations.c.id == conversation_id, conversations.c.reflection.is_(None))
+            .values(reflection=reflection, reflected_at=now())
+        )
+    return result.rowcount == 1
 
 
 def read_messages(conversation_id: str, limit: int):
