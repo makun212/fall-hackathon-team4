@@ -1233,6 +1233,9 @@ def chat(
     existing = db.get_conversation(conversation_id)
     if existing is not None and existing["role_id"] != role["id"]:
         raise HTTPException(status_code=400)
+    if not chat_service.allow_request(conversation_id):
+        # 送信が多すぎる（#35）。画面は 429 を見て「少し待ってから」の文を出す
+        raise HTTPException(status_code=429)
 
     material_text = get_material_text(SEED_DATA["preset_roles"]["material_id"])
     try:
