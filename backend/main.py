@@ -39,14 +39,27 @@ SEED_DATA = apply_maihime(load_seed_data())
 
 
 
-def get_roles():
-    # 生徒が選べるロールの一覧。教師が確定したロールに差し替えるときは、ここだけ直す
+# 生徒が選んだ教材セットを覚えておく Cookie の名前（#44）
+MATERIAL_SET_COOKIE = "material_set"
+
+
+def current_material_set(request: Request | None):
+    # 生徒が選んだ教材セット（get_material_set_for_chat の形）。選んでいなければ None
+    material_set_id = request.cookies.get(MATERIAL_SET_COOKIE) if request is not None else None
+    return get_material_set_for_chat(material_set_id) if material_set_id else None
+
+
+def get_roles(request: Request | None = None):
+    # 生徒が選べるロールの一覧。教材セットを選んでいれば、そのロール。なければ舞姫のプリセット
+    material_set = current_material_set(request)
+    if material_set is not None:
+        return material_set["roles"]
     return SEED_DATA["preset_roles"]["roles"]
 
 
-def find_role(role_id: str):
+def find_role(role_id: str, request: Request | None = None):
     # get_roles() の中から ID が一致するロールを返す。なければ None
-    for role in get_roles():
+    for role in get_roles(request):
         if role["id"] == role_id:
             return role
     return None
@@ -717,6 +730,7 @@ def read_material_set_records():
             edited = role.get("edited") or {}
             roles.append(
                 {
+                    "role_id": role["role_id"],
                     "name": edited.get("name") or source["name"],
                     "features": list(edited.get("features") or source.get("features") or []),
                     "image": find_static_image(source.get("image")),
@@ -727,6 +741,7 @@ def read_material_set_records():
         records.append(
             {
                 "id": ms["id"],
+                "material_id": material["id"],
                 "title": ms.get("title_label") or material["title"],
                 "author": material.get("author") or "",
                 "range_start": paragraph_ids.index(range_["from"]) + 1,
@@ -746,6 +761,7 @@ def read_material_set_records():
         records.append(
             {
                 "id": ms["id"],
+                "material_id": material["id"],
                 "title": material["title"],
                 "author": material.get("author") or "",
                 "range_start": ms["range_start"],
@@ -754,7 +770,13 @@ def read_material_set_records():
                 "question": ms["question"] or "",
                 "created_at": ms["created_at"],
                 "roles": [
-                    {"name": r["name"], "features": r["features"], "image": find_static_image(r["image"]), "edited": r["edited"]}
+                    {
+                        "role_id": r["role_id"],
+                        "name": r["name"],
+                        "features": r["features"],
+                        "image": find_static_image(r["image"]),
+                        "edited": r["edited"],
+                    }
                     for r in ms["roles"]
                 ],
             }
@@ -1148,16 +1170,24 @@ def student_home(request: Request):
 
 # 生徒用のロール選択画面
 @app.get("/student/roles", response_class=HTMLResponse)
-def student_roles(request: Request):
+def student_roles(request: Request, material_set_id: str = Query("", alias="set")):
+    # ?set= で教材セットを選んだときは、その教材セットを Cookie に覚えて、ロールを出す（#44）
+    if material_set_id:
+        material_set = get_material_set_for_chat(material_set_id)
+        if material_set is None:
+            return RedirectResponse("/student", status_code=303)
+        response = templates.TemplateResponse(request, "role_select.html", {"roles": material_set["roles"]})
+        response.set_cookie(MATERIAL_SET_COOKIE, material_set_id, httponly=True, samesite="lax")
+        return response
     return templates.TemplateResponse(
-        request, "role_select.html", {"roles": get_roles()}
+        request, "role_select.html", {"roles": get_roles(request)}
     )
 
 
 # 生徒用：対話前の問いかけ画面。role_id は get_roles() にあるIDだけを受け付ける
 @app.get("/student/question", response_class=HTMLResponse)
 def student_question(request: Request, role_id: str | None = None):
-    role = find_role(role_id) if role_id else None
+    role = find_role(role_id, request) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
     return render_student_question(request, role)
@@ -1170,7 +1200,7 @@ def student_question_submit(
     role_id: str = Form(""),
     opinion: str = Form(""),
 ):
-    role = find_role(role_id) if role_id else None
+    role = find_role(role_id, request) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
 
@@ -1187,7 +1217,8 @@ def student_question_submit(
 
     # 対話前の考えを保存して、会話を始める（#46）
     conversation_id = chat_service.new_conversation_id()
-    db.create_conversation(conversation_id, role["id"], text)
+    material_set = current_material_set(request)
+    db.create_conversation(conversation_id, role["id"], text, request.cookies.get(MATERIAL_SET_COOKIE) if material_set else None)
 
     # リダイレクト先は、ユーザーの入力ではなく、検証したロールのIDと、作った会話 ID から組み立てる
     return RedirectResponse(
@@ -1200,7 +1231,7 @@ def student_question_submit(
 def student_chat(request: Request, role_id: str | None = None, conversation_id: str | None = None):
     if role_id is None:
         return templates.TemplateResponse(request, "index.html")
-    role = find_role(role_id)
+    role = find_role(role_id, request)
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
     # 問いかけ画面から来たときは、その会話を続ける。なければ新しい会話にする
@@ -1212,7 +1243,7 @@ def student_chat(request: Request, role_id: str | None = None, conversation_id: 
 # 生徒用：対話後の感想入力画面。role_id は get_roles() にあるIDだけを受け付ける
 @app.get("/student/reflection", response_class=HTMLResponse)
 def student_reflection(request: Request, role_id: str | None = None, conversation_id: str | None = None):
-    role = find_role(role_id) if role_id else None
+    role = find_role(role_id, request) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
     return render_student_reflection(request, role, find_conversation(conversation_id, role))
@@ -1226,7 +1257,7 @@ def student_reflection_submit(
     reflection: str = Form(""),
     conversation_id: str = Form(""),
 ):
-    role = find_role(role_id) if role_id else None
+    role = find_role(role_id, request) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
     conversation = find_conversation(conversation_id, role)
@@ -1258,13 +1289,55 @@ def student_finish(request: Request):
     return templates.TemplateResponse(request, "student_finish.html")
 
 
-def get_material_text(material_id: str):
+def get_material_text(material_id: str, range_start: int | None = None, range_end: int | None = None):
     # AIに渡す本文。段落ごとに [p001] のような段落IDを付ける（AIが根拠の場所を示せるように）
-    # TODO: 教材セットの使用範囲が生徒の画面まで届くようになったら、その範囲の段落だけにする
+    # range_start・range_end（第何段落か。1から数える）を渡すと、その範囲の段落だけにする（#44）
     for m in SEED_DATA.get("materials") or []:
         if m["id"] == material_id:
-            return "\n\n".join(f"[{p['id']}]\n{p['text']}" for p in m.get("paragraphs") or [])
+            paragraphs = m.get("paragraphs") or []
+            if range_start is not None and range_end is not None:
+                paragraphs = paragraphs[range_start - 1 : range_end]
+            return "\n\n".join(f"[{p['id']}]\n{p['text']}" for p in paragraphs)
     return ""
+
+
+def find_role_source(role_id: str):
+    # プリセットのロールか、AIの候補から、元のロールを探す。なければ None
+    for role in (SEED_DATA.get("preset_roles") or {}).get("roles") or []:
+        if role["id"] == role_id:
+            return role
+    for group in SEED_DATA.get("role_candidates") or []:
+        for candidate in group.get("candidates") or []:
+            if candidate["candidate_id"] == role_id:
+                return candidate
+    return None
+
+
+def get_material_set_for_chat(material_set_id: str):
+    # 生徒の対話に使う教材セット。{"material_id", "material_text", "roles"} を返す。なければ None
+    # roles は prompts.build_system_prompt に渡せる形（教師が編集した名前・特徴を使い、根拠と口調は元のロールから取る）
+    record = next((r for r in read_material_set_records() if r["id"] == material_set_id), None)
+    if record is None:
+        return None
+    roles = []
+    for r in record["roles"]:
+        source = find_role_source(r["role_id"]) or {}
+        roles.append(
+            {
+                "id": r["role_id"],
+                "name": r["name"],
+                "summary": source.get("summary") or "",
+                "features": list(r["features"]),
+                "basis": list(source.get("basis") or []),
+                "prompt_hint": source.get("prompt_hint") or "",
+                "image": r["image"],
+            }
+        )
+    return {
+        "material_id": record["material_id"],
+        "material_text": get_material_text(record["material_id"], record["range_start"], record["range_end"]),
+        "roles": roles,
+    }
 
 
 @app.post("/chat", response_class=HTMLResponse)
@@ -1275,7 +1348,7 @@ def chat(
     conversation_id: str | None = Form(None),
 ):
     # role_id と conversation_id は、チャット画面（/student/chat?role_id=...）のフォームから届く
-    role = find_role(role_id) if role_id else None
+    role = find_role(role_id, request) if role_id else None
     text = message.strip()
     if role is None or not text or not chat_service.is_valid_conversation_id(conversation_id):
         raise HTTPException(status_code=400)
@@ -1287,7 +1360,12 @@ def chat(
         # 送信が多すぎる（#35）。画面は 429 を見て「少し待ってから」の文を出す
         raise HTTPException(status_code=429)
 
-    material_text = get_material_text(SEED_DATA["preset_roles"]["material_id"])
+    # 教材セットを選んでいれば、その使用範囲の本文だけを渡す（#44）
+    material_set = current_material_set(request)
+    if material_set is not None:
+        material_text = material_set["material_text"]
+    else:
+        material_text = get_material_text(SEED_DATA["preset_roles"]["material_id"])
     try:
         reply = chat_service.reply(conversation_id, role, material_text, text)
     except AIBusyError:
