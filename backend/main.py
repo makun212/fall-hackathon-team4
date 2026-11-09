@@ -38,16 +38,22 @@ ROLE_EDITS = {}
 ROLE_EDITS_LOCK = threading.Lock()
 
 
-def get_roles():
-    # 生徒が選べるロールの一覧。教師が確定したロールに差し替えるときは、ここだけ直す
-    return SEED_DATA["preset_roles"]["roles"]
+def get_roles(material_set_id: str = ""):
+    # 生徒が選べるロールの一覧（教師が確定した教材セットのロール）。
+    # セットが見つからなければ、一番新しいセットのロール（生徒用ホームと同じ決め方）
+    material_sets = get_confirmed_material_sets()
+    selected = next((s for s in material_sets if s["id"] == material_set_id), None)
+    if selected is None and material_sets:
+        selected = material_sets[0]
+    return selected["roles"] if selected else []
 
 
 def find_role(role_id: str):
-    # get_roles() の中から ID が一致するロールを返す。なければ None
-    for role in get_roles():
-        if role["id"] == role_id:
-            return role
+    # 確定済みの教材セットのロールから、ID（教材セットID:ロールID）が一致するものを返す。なければ None
+    for material_set in get_confirmed_material_sets():
+        for role in material_set["roles"]:
+            if role["id"] == role_id:
+                return role
     return None
 
 
@@ -667,7 +673,8 @@ def read_material_set_records():
     # 確定済みの教材セットを、ダミーデータから取り出す。教材セットとロールのキー名を参照するのはここだけ
     # TODO（バックエンド担当）: 教材セットの保存ができたら、この関数の中身を、保存した教材セットを同じ形で読む処理に差し替える
     # 形: id、title、author、range_start・range_end（第何段落か。1から数える）、paragraph_count、question、created_at、
-    #     roles（name、features、image、edited の辞書のリスト。edited は教師が編集したかどうか）
+    #     roles（id、role_id、material_set_id、name、summary、features、image、edited の辞書のリスト。edited は教師が編集したかどうか）
+    #     ロールの id は「教材セットID:ロールID」（例: ms001:r002）。同じ作品の別のセットで、同じロールを違う内容に編集しても区別できる
     materials = {m["id"]: m for m in SEED_DATA.get("materials") or []}
     sources = {
         "preset": {r["id"]: r for r in (SEED_DATA.get("preset_roles") or {}).get("roles") or []},
@@ -696,7 +703,11 @@ def read_material_set_records():
             edited = role.get("edited") or {}
             roles.append(
                 {
+                    "id": f"{ms['id']}:{role['role_id']}",
+                    "role_id": role["role_id"],
+                    "material_set_id": ms["id"],
                     "name": edited.get("name") or source["name"],
+                    "summary": source.get("summary") or "",
                     "features": list(edited.get("features") or source.get("features") or []),
                     "image": find_static_image(source.get("image")),
                     "edited": bool(edited),
@@ -1069,11 +1080,11 @@ def student_home(request: Request):
     )
 
 
-# 生徒用のロール選択画面
+# 生徒用のロール選択画面。set は生徒用ホームで選んだ教材セットのID（なければ一番新しいセット）
 @app.get("/student/roles", response_class=HTMLResponse)
-def student_roles(request: Request):
+def student_roles(request: Request, material_set_id: str = Query("", alias="set")):
     return templates.TemplateResponse(
-        request, "role_select.html", {"roles": get_roles()}
+        request, "role_select.html", {"roles": get_roles(material_set_id)}
     )
 
 
