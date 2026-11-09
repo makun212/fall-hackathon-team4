@@ -1,5 +1,6 @@
 """/chat のテスト。本物の Gemini は呼ばず、偽物の client を使う。backend フォルダで python -m unittest discover -s tests"""
 
+import json
 import re
 import sys
 import unittest
@@ -28,12 +29,13 @@ class FakeModels:
     def __init__(self):
         self.calls = []
         self.error_code = None
+        self.evidence = []
 
     def generate_content(self, model, contents, config):
         self.calls.append({"system": config.system_instruction, "contents": [(c.role, c.parts[0].text) for c in contents]})
         if self.error_code:
             raise errors.APIError(self.error_code, {"error": {"message": "test", "status": "TEST"}})
-        return FakeResponse(f"返事{len(self.calls)}")
+        return FakeResponse(json.dumps({"reply": f"返事{len(self.calls)}", "evidence": self.evidence}, ensure_ascii=False))
 
 
 class FakeClient:
@@ -96,6 +98,26 @@ class ChatTests(unittest.TestCase):
         other_id = re.search(r'name="conversation_id" value="([0-9a-f]{32})"', other).group(1)
         self.send("B の発言", conversation_id=other_id)
         self.assertEqual([("user", "B の発言")], self.client.models.calls[-1]["contents"])
+
+    def test_evidence_is_checked_shown_and_saved(self):
+        self.client.models.evidence = [
+            {"paragraph_id": "p046", "quote": "棄て難きはエリスが愛"},
+            {"paragraph_id": "p046", "quote": "本文にない作り話"},
+        ]
+        html = self.send("豊太郎はエリスをどう思っていた？").text
+        self.assertIn("根拠を表示する", html)
+        self.assertIn("棄て難きはエリスが愛", html)
+        self.assertIn("第46段落", html)
+        self.assertNotIn("本文にない作り話", html)
+        self.assertIn("【出力の形】", self.client.models.calls[-1]["system"])
+
+    def test_no_evidence_hides_button(self):
+        self.assertNotIn("根拠を表示する", self.send("こんにちは").text)
+
+    def test_broken_json_is_an_error(self):
+        self.client.models.generate_content = lambda model, contents, config: FakeResponse("JSONではない")
+        self.assertEqual(502, self.send("こんにちは").status_code)
+        self.assertEqual([], chat.read_history(self.conversation_id))
 
     def test_message_is_escaped(self):
         self.assertIn("&lt;script&gt;", self.send("<script>").text)
