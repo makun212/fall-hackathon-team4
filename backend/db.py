@@ -122,11 +122,17 @@ def use_engine(engine):
 # ---- 会話（#20）と、対話前の考え・感想（#46） ----
 
 
-def create_conversation(conversation_id: str, role_id: str, pre_opinion: str):
+def create_conversation(conversation_id: str, role_id: str, pre_opinion: str, material_set_id: str | None = None):
     # 対話前の考えを送ったときに、会話を1件作る
     with get_engine().begin() as conn:
         conn.execute(
-            insert(conversations).values(id=conversation_id, role_id=role_id, pre_opinion=pre_opinion, created_at=now())
+            insert(conversations).values(
+                id=conversation_id,
+                role_id=role_id,
+                pre_opinion=pre_opinion,
+                material_set_id=material_set_id,
+                created_at=now(),
+            )
         )
 
 
