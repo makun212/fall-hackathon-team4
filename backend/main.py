@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from content import apply_maihime
+
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 app = FastAPI()
@@ -30,7 +32,8 @@ def load_seed_data():
         return json.load(f)
 
 
-SEED_DATA = load_seed_data()
+# 『舞姫』は、厚樹さんが用意した本文と立場に置き換える（content.py）
+SEED_DATA = apply_maihime(load_seed_data())
 
 # 仮の保存場所（サーバーのメモリ）。再起動すると消える。DBが入ったら、ロールの保存・取得の処理に差し替える
 # キーは (material_id, candidate_id)。値は {"name": ..., "features": [...]}、または None（元に戻した）

@@ -1,10 +1,9 @@
-"""標準ライブラリだけで実行。PR #63のデータはGitから読み取り専用で参照する。"""
+"""標準ライブラリだけで実行。#63 の立場のデータをファイルから読む。"""
 
 import copy
 import importlib.util
 import json
 from pathlib import Path
-import subprocess
 import unittest
 
 
@@ -12,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("prompts", ROOT / "backend" / "prompts.py")
 prompts = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prompts)
-PR63_COMMIT = "7cd9c82ba36c6c2e3b22267e8593ad883bc98e30"
+ROLES_PATH = ROOT / "backend" / "data" / "preparation" / "maihime_preset_roles.json"
 ROLE_HEADER = "【ロール資料（JSON）】\n"
 TEXT_HEADER = "【今回の本文 material_text（JSON文字列）】\n"
 
@@ -20,11 +19,7 @@ TEXT_HEADER = "【今回の本文 material_text（JSON文字列）】\n"
 class PromptTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        raw = subprocess.check_output(
-            ["git", "show", f"{PR63_COMMIT}:backend/data/preparation/maihime_preset_roles.json"],
-            cwd=ROOT,
-        )
-        cls.roles = json.loads(raw.decode("utf-8"))["roles"]
+        cls.roles = json.loads(ROLES_PATH.read_text(encoding="utf-8"))["roles"]
 
     def test_all_six_roles_preserve_data_and_do_not_mutate_inputs(self):
         self.assertEqual(6, len(self.roles))
