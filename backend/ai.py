@@ -17,7 +17,12 @@ DEFAULT_MODEL = "gemini-3.6-flash"
 TIMEOUT_SECONDS = 25
 
 # 返答の長さの上限（トークン数）。長すぎる返答で料金と待ち時間が増えるのを防ぐ
-MAX_OUTPUT_TOKENS = 1024
+# Gemini 3 は返答の前に「考える」ぶんのトークンもここに含まれる。1024 だと考えるだけで使い切り、返答が途中で切れた
+MAX_OUTPUT_TOKENS = 4096
+
+# どれだけ考えてから答えるか（minimal / low / medium / high）。高いほど丁寧だが遅い
+# 舞姫の対話で試したところ、low で3〜5秒、返答も途中で切れなかった
+THINKING_LEVEL = types.ThinkingLevel.LOW
 
 # 会話履歴の役割。ダミーデータの chat_messages と同じ user / assistant を使う
 ROLE_TO_GEMINI = {"user": "user", "assistant": "model"}
@@ -66,6 +71,7 @@ def call_gemini(system_prompt: str, messages, config_extra=None):
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
         max_output_tokens=MAX_OUTPUT_TOKENS,
+        thinking_config=types.ThinkingConfig(thinking_level=THINKING_LEVEL),
         **(config_extra or {}),
     )
     try:
