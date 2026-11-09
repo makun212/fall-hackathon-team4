@@ -16,6 +16,7 @@ import ai  # noqa: E402
 import chat  # noqa: E402
 import db  # noqa: E402
 import main  # noqa: E402
+from rate_limit import RateLimiter  # noqa: E402
 
 
 class FakeResponse:
@@ -44,6 +45,9 @@ class ChatTests(unittest.TestCase):
     def setUp(self):
         # テストごとに、メモリ上の空のDBを使う
         db.use_engine(create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}))
+        # 回数の制限は test_rate_limit.py で確かめるので、ここではゆるくする
+        chat.conversation_limiter = RateLimiter(1000, 60)
+        chat.global_limiter = RateLimiter(1000, 60)
         self.client = FakeClient()
         ai._client = self.client
         self.app = TestClient(main.app)
