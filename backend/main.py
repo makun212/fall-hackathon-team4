@@ -65,6 +65,30 @@ def find_role(role_id: str, request: Request | None = None):
     return None
 
 
+def conversation_material_set(request: Request, conversation=None):
+    # 継続時の教材はサーバーに保存したIDから取得する。Cookieは一致確認にだけ使う。
+    # 未指定（None）の全文モードも固定し、途中のCookie変更や削除は400で拒否する。
+    requested_id = request.cookies.get(MATERIAL_SET_COOKIE) or None
+    material_set_id = conversation["material_set_id"] if conversation is not None else requested_id
+    if conversation is not None and requested_id != material_set_id:
+        raise HTTPException(status_code=400)
+    if material_set_id is None:
+        if conversation is not None and not db.has_conversation_context(conversation["id"]):
+            # 旧直接チャットではNULLが保存漏れの場合もある。Cookieから範囲を補完しない。
+            raise HTTPException(status_code=400)
+        return None
+    material_set = get_material_set_for_chat(material_set_id)
+    if material_set is None:
+        # 削除済み・不明なセットを、プリセット全文へ暗黙に切り替えない。
+        raise HTTPException(status_code=400)
+    return material_set
+
+
+def find_conversation_role(role_id: str, material_set):
+    roles = material_set["roles"] if material_set is not None else get_roles()
+    return next((role for role in roles if role["id"] == role_id), None)
+
+
 # ---- 生徒用：対話前の問いかけ ----
 
 # 事前の考えの文字数の上限。この値は、チームで確認して決める（仮の値）
@@ -1200,7 +1224,8 @@ def student_question_submit(
     role_id: str = Form(""),
     opinion: str = Form(""),
 ):
-    role = find_role(role_id, request) if role_id else None
+    material_set = conversation_material_set(request)
+    role = find_conversation_role(role_id, material_set) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
 
@@ -1217,7 +1242,6 @@ def student_question_submit(
 
     # 対話前の考えを保存して、会話を始める（#46）
     conversation_id = chat_service.new_conversation_id()
-    material_set = current_material_set(request)
     db.create_conversation(conversation_id, role["id"], text, request.cookies.get(MATERIAL_SET_COOKIE) if material_set else None)
 
     # リダイレクト先は、ユーザーの入力ではなく、検証したロールのIDと、作った会話 ID から組み立てる
@@ -1231,12 +1255,21 @@ def student_question_submit(
 def student_chat(request: Request, role_id: str | None = None, conversation_id: str | None = None):
     if role_id is None:
         return templates.TemplateResponse(request, "index.html")
-    role = find_role(role_id, request)
+    conversation = db.get_conversation(conversation_id) if chat_service.is_valid_conversation_id(conversation_id) else None
+    if conversation is not None and conversation["role_id"] != role_id:
+        # 従来どおり、別ロールの会話IDを新しい会話へ引き継がない。
+        conversation = None
+    material_set = conversation_material_set(request, conversation)
+    role = find_conversation_role(role_id, material_set)
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
     # 問いかけ画面から来たときは、その会話を続ける。なければ新しい会話にする
-    conversation = find_conversation(conversation_id, role)
     conversation_id = conversation["id"] if conversation else chat_service.new_conversation_id()
+    if conversation is None:
+        # 問いかけ画面を通らずに開く場合も、IDを発行した時点の教材を固定する。
+        db.create_conversation(
+            conversation_id, role["id"], "", request.cookies.get(MATERIAL_SET_COOKIE) if material_set else None
+        )
     return templates.TemplateResponse(request, "index.html", {"role": role, "conversation_id": conversation_id})
 
 
@@ -1357,20 +1390,28 @@ def chat(
     conversation_id: str | None = Form(None),
 ):
     # role_id と conversation_id は、チャット画面（/student/chat?role_id=...）のフォームから届く
-    role = find_role(role_id, request) if role_id else None
     text = message.strip()
-    if role is None or not text or not chat_service.is_valid_conversation_id(conversation_id):
+    if not text or not chat_service.is_valid_conversation_id(conversation_id):
+        raise HTTPException(status_code=400)
+    existing = db.get_conversation(conversation_id)
+    material_set = conversation_material_set(request, existing)
+    role = find_conversation_role(role_id, material_set) if role_id else None
+    if role is None:
         raise HTTPException(status_code=400)
     # すでにある会話は、同じロールでしか続けられない（ほかのロールの会話に混ぜない）
-    existing = db.get_conversation(conversation_id)
     if existing is not None and existing["role_id"] != role["id"]:
         raise HTTPException(status_code=400)
     if not chat_service.allow_request(conversation_id):
         # 送信が多すぎる（#35）。画面は 429 を見て「少し待ってから」の文を出す
         raise HTTPException(status_code=429)
 
+    material_set_id = existing["material_set_id"] if existing is not None else (
+        request.cookies.get(MATERIAL_SET_COOKIE) if material_set is not None else None
+    )
+    if not db.bind_conversation_context(conversation_id, role["id"], material_set_id):
+        raise HTTPException(status_code=400)
+
     # 教材セットを選んでいれば、その使用範囲の本文だけを渡す（#44）
-    material_set = current_material_set(request)
     if material_set is not None:
         material_text = material_set["material_text"]
     else:
