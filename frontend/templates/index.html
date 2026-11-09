@@ -72,7 +72,7 @@
       {% if role_id %}<input type="hidden" name="role_id" value="{{ role_id }}">{% endif %}
       <div class="flex gap-3">
         <input id="chat-message" name="message" required maxlength="200" autocomplete="off"
-               placeholder="登場人物に話しかけてみよう" aria-describedby="chat-count"
+               placeholder="選んだ立場のAIに話しかけてみよう" aria-describedby="chat-count"
                class="flex-1 min-w-0 min-h-12 px-4 bg-paper border border-line rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
         {{ btn_primary("送信", busy_label="送信中…") }}
       </div>
