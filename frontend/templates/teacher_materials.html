@@ -1,6 +1,6 @@
 {# 教師用：教材と使用範囲の選択画面（Figma 4）。materials / material / range_type / start / end / error は main.py から渡す #}
 {# materials は get_materials()、material は get_material() の値（選んでいないときは None） #}
-{% extends "base.html" %}
+{% extends "teacher_base.html" %}
 {% from "_components.html" import page_header, btn_primary, btn_secondary, badge %}
 
 {# 移動先・送信先は、ここだけで定義する #}
@@ -9,7 +9,7 @@
 
 {% block title %}教材選択 | {% endblock %}
 
-{# 数字の入力欄（開始・終了の1つ分）。kind は "paragraph" / "line"。選んでいない種類は、最初から disabled にする（JavaScriptが動かなくても、選んだ種類の値だけが送信される） #}
+{# 数字の入力欄（開始・終了の1つ分）。kind は "paragraph"（チームの決定で、行の指定は画面から外した）。選んでいない種類は、最初から disabled にする（JavaScriptが動かなくても、選んだ種類の値だけが送信される） #}
 {% macro range_number(kind, part, label, value) %}
 <label for="{{ kind }}-{{ part }}" class="sr-only">{{ label }}</label>
 <input type="text" id="{{ kind }}-{{ part }}" name="{{ part }}" inputmode="numeric" maxlength="6" autocomplete="off"
@@ -89,10 +89,10 @@
     {% else %}
       <div>
         <h2 class="text-2xl font-bold leading-snug break-words">{{ material.title }}</h2>
-        {# 著者名と段落数・行数を1行に並べる #}
+        {# 著者名と段落数を1行に並べる #}
         <p class="flex flex-wrap justify-between gap-x-4 text-base text-muted">
           <span>{{ material.author }}</span>
-          <span>全 {{ material.paragraph_count }} 段落／{{ material.max_line }} 行</span>
+          <span>全 {{ material.paragraph_count }} 段落</span>
         </p>
       </div>
 
@@ -113,9 +113,6 @@
           {{ range_option("all", "全文") }}
           {% call range_option("paragraph", "形式段落") %}
             <span aria-hidden="true">第</span>{{ range_number("paragraph", "start", "形式段落の開始", start) }}<span aria-hidden="true">段落 〜 第</span>{{ range_number("paragraph", "end", "形式段落の終了", end) }}<span aria-hidden="true">段落</span>
-          {% endcall %}
-          {% call range_option("line", "行番号") %}
-            {{ range_number("line", "start", "行番号の開始", start) }}<span aria-hidden="true">行 〜</span>{{ range_number("line", "end", "行番号の終了", end) }}<span aria-hidden="true">行</span>
           {% endcall %}
         </fieldset>
 

@@ -1,0 +1,3 @@
+{# htmx で本を押したときの返し：右の詳細（#set-detail の中身）と、本棚（hx-swap-oob で差し替え） #}
+{% include "_teacher_set_detail.html" %}
+{% with oob = true %}{% include "_teacher_shelves.html" %}{% endwith %}

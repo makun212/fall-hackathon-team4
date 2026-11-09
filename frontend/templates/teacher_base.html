@@ -1,0 +1,33 @@
+{# 教師用の画面の共通レイアウト。base.html のヘッダーを、教師用の上部バー（ナビ付き）に差し替える #}
+{# 子のテンプレートで {% set nav_current = "chats" %} のように書くと、そのナビが現在地として強調される。書かなければ「教材を選ぶ」 #}
+{% extends "base.html" %}
+
+{# ナビの項目。URLや文言を変えるときはここだけ直す #}
+{% set teacher_nav = [
+  {"key": "materials", "label": "教材を選ぶ", "href": "/teacher"},
+  {"key": "chats", "label": "生徒のチャット一覧", "href": "/teacher/chats"},
+] %}
+
+{% block header %}
+{% set current = nav_current if nav_current is defined else "materials" %}
+{# 子のテンプレートで {% set hide_nav = ["chats"] %} のように書くと、その画面ではそのナビを出さない #}
+{% set hidden = hide_nav if hide_nav is defined else [] %}
+<header class="bg-cream-paper border-b-2 border-crimson text-sepia">
+  <div class="max-w-6xl mx-auto px-8 flex flex-wrap items-center gap-x-7 min-h-14">
+    <a href="/teacher" class="inline-flex items-center gap-2.5 min-h-12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">
+      <span class="font-serif text-xl font-bold tracking-[0.08em]">{{ app_name }}</span>
+      <span class="px-2.5 py-0.5 rounded-full bg-rose-soft text-sm font-bold text-crimson-dark">教師用</span>
+    </a>
+    <nav aria-label="教師用のメニュー" class="flex flex-wrap items-center gap-x-7">
+      {% for item in teacher_nav if item.key not in hidden %}
+        {% if item.key == current %}
+          <a href="{{ item.href }}" aria-current="page" class="inline-flex items-center min-h-12 pt-[3px] border-b-3 border-crimson text-base font-bold text-crimson-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">{{ item.label }}</a>
+        {% else %}
+          <a href="{{ item.href }}" class="inline-flex items-center min-h-12 text-base text-sepia-muted hover:text-crimson-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">{{ item.label }}</a>
+        {% endif %}
+      {% endfor %}
+    </nav>
+    <a href="/" class="ml-auto my-1 inline-flex items-center min-h-12 px-4 border border-rose-line rounded-lg text-base font-bold text-crimson-dark hover:bg-rose-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">トップに戻る</a>
+  </div>
+</header>
+{% endblock %}

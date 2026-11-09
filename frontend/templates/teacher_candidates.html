@@ -1,8 +1,8 @@
 {# 教師用：ロールの選択画面（Figma 5）。値はすべて main.py の render_teacher_candidates() から渡す（検証済み） #}
 {# material: get_material() の値 / range_type・start・end: 使用範囲 / range_label: 範囲の表示用の文章 #}
 {# candidates: get_role_candidates() の値（最大6つ） / selected_ids: 選択済みの候補ID / error: エラーの文章（なければ None） #}
-{# select_max: 選べるロールの数の上限（main.py の ROLE_SELECT_MAX） #}
-{% extends "base.html" %}
+{# select_max: 選ぶロールの数（main.py の ROLE_SELECT_MAX）。チームの決定で、ちょうどこの数を選ぶ（送信時のチェックはバックエンドで対応予定） #}
+{% extends "teacher_base.html" %}
 {% from "_components.html" import page_header, btn_primary, btn_secondary, avatar, badge %}
 
 {# 移動先・送信先は、ここだけで定義する #}
@@ -42,7 +42,7 @@
           <p>{{ error }}</p>
         </div>
       {% else %}
-        <p>生徒との対話に使うロールを、{{ select_max }}つまで選んでください。選んだロールだけが、使われます。</p>
+        <p>生徒との対話に使うロールを、{{ select_max }}つ選んでください。生徒は、この{{ select_max }}つから選びます。</p>
       {% endif %}
       <p class="shrink-0 tabular-nums" aria-live="polite">
         <span class="font-bold">選択中 <span id="selected-count">{{ selected_ids | length }}</span> / {{ select_max }}</span>
@@ -111,8 +111,8 @@
 </form>
 
 <script>
-  // 選んだ数の表示を更新し、上限まで選んだら、選んでいないチェックボックスを押せなくする（文字は textContent で入れる）
-  // JavaScriptが動かないときも、上限を超えた送信は main.py が受け付けない
+  // 選んだ数の表示を更新し、決まった数まで選んだら、選んでいないチェックボックスを押せなくする（文字は textContent で入れる）
+  // JavaScriptが動かないときも、数が合わない送信は main.py が受け付けない
   (() => {
     const form = document.getElementById("candidates-form");
     const count = document.getElementById("selected-count");

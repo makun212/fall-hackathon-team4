@@ -20,18 +20,48 @@
       --color-accent-soft: #FDECEE;  /* 差し色の薄い背景 */
       --color-warning: #B45309;      /* 注意（軽い） */
       --font-sans: "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+
+      /* ここから下は、教師用の画面（上部バー・教材セット選択の本棚）だけで使う。DESIGN.md の「教師用の画面の例外」を見る */
+      --color-crimson: #A61E22;       /* 深紅（教師用の差し色） */
+      --color-crimson-dark: #8E1B1F;  /* 濃い赤（文字） */
+      --color-rose-soft: #F8E3E0;     /* 深紅の薄い背景（バッジ） */
+      --color-rose-line: #C9A9A3;     /* 補助ボタンの枠 */
+      --color-cream: #F7F0E3;         /* 教材セット選択の背景 */
+      --color-cream-paper: #FFFDF8;   /* 上部バー・カード */
+      --color-cream-line: #E5D9C3;    /* 枠線 */
+      --color-kinari: #FBF1DC;        /* 生成り */
+      --color-gold: #E4C26A;          /* 金（選択中の縁・帯） */
+      --color-sepia: #2B2118;         /* 文字 */
+      --color-sepia-muted: #5C4B3B;   /* 補助の文字 */
+      --color-wood: #8A5A2B;          /* 本棚の枠 */
+      --color-wood-dark: #5A3A1E;     /* 本棚の奥 */
+      --color-wood-light: #A8763B;    /* 棚板 */
+      --color-wood-shadow: #3E2813;   /* 棚板の影 */
+      --color-book-navy: #1F2A44;     /* 背表紙の色（ここから下） */
+      --color-book-green: #2F5D50;
+      --color-book-brown: #7A4B22;
+      --color-book-lemon: #D9B454;
+      --color-book-indigo: #2C3E63;
+      --color-book-blue: #3D5A80;
+      --font-serif: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif;
+      --breakpoint-xs: 30rem;         /* 480px。本棚の本の大きさを切り替える */
     }
   </style>
   {% block head %}{% endblock %}
 </head>
-<body class="bg-paper text-ink font-sans text-lg leading-relaxed min-h-screen">
-  {# 全画面で別の見た目にしたいページ（ログイン画面など）は、このブロックごと差し替える #}
+<body class="{% block body_class %}bg-paper text-ink{% endblock %} font-sans text-lg leading-relaxed min-h-screen">
+  {# 横幅・高さは、タブレットの横画面（1180×820、Safari の表示領域は約1180×740）に合わせている #}
+  {# ヘッダーの高さ（56px＋線2px）と main の上の余白（24px）を変えたら、index.html の高さの計算も直す #}
+  {# 全画面で別の見た目にしたいページ（ウェルカム画面など）は、body ブロックごと差し替える #}
   {% block body %}
+  {# 教師用の画面は teacher_base.html で、このヘッダーを差し替える #}
+  {% block header %}
   <header class="bg-paper border-b-2 border-accent">
     <div class="max-w-6xl mx-auto px-8">
       <a href="/" class="inline-flex items-center min-h-14 text-2xl font-bold">{{ app_name }}</a>
     </div>
   </header>
+  {% endblock %}
   <main class="max-w-6xl mx-auto px-8 py-6">
     {% block content %}{% endblock %}
   </main>

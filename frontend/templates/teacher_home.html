@@ -1,13 +1,31 @@
-{% extends "base.html" %}
-{% from "_components.html" import page_header, btn_primary, btn_secondary %}
+{# 教師用のトップ：教材セット選択。左の本棚から本（完成した教材セット）を選ぶと、右に中身が出る #}
+{# material_sets と selected は main.py の render_teacher_home() から渡す。本を押したときは htmx で詳細と本棚だけを差し替える #}
+{% extends "teacher_base.html" %}
+{% set nav_current = "materials" %}
+{# この画面からは、生徒のチャット一覧へは行かない #}
+{% set hide_nav = ["chats"] %}
 
-{% block title %}先生 | {% endblock %}
+{% block title %}教材セット選択 | {% endblock %}
+{% block body_class %}bg-cream text-sepia{% endblock %}
 
 {% block content %}
-{{ page_header("教師用の画面（準備中）") }}
-<div class="flex flex-wrap gap-4">
-  {{ btn_primary("教材を選ぶ", href="/teacher/materials") }}
-  {{ btn_primary("生徒のチャット一覧", href="/teacher/chats") }}
-  {{ btn_secondary("トップに戻る", href="/") }}
+<div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+  <div class="flex flex-col gap-1">
+    <h1 class="font-serif text-[26px] font-bold leading-snug">教材セット選択</h1>
+    <p class="text-base text-sepia-muted">左の本棚から本を1冊選ぶと、右にそのセットの中身が出ます。</p>
+  </div>
+  <a href="/teacher/materials" class="inline-flex items-center gap-2 min-h-12 px-5 border border-crimson rounded-lg bg-cream-paper text-base font-bold text-crimson-dark hover:bg-rose-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    新規作成
+  </a>
+</div>
+
+{# 幅1024px以上は左に本棚、右に詳細。それより狭いと、本棚の下に詳細 #}
+<div class="flex flex-col lg:flex-row lg:items-start gap-6 mt-[18px]">
+  {% include "_teacher_shelves.html" %}
+
+  <section id="set-detail" aria-live="polite" aria-label="選んでいるセットの中身" class="flex-1 min-w-0 w-full lg:min-h-[540px] flex flex-col gap-[18px] p-6 sm:p-[26px] bg-cream-paper border border-cream-line rounded-xl">
+    {% include "_teacher_set_detail.html" %}
+  </section>
 </div>
 {% endblock %}

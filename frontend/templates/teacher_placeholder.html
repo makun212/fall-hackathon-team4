@@ -1,0 +1,11 @@
+{# 教師用：まだ中身のない画面（準備中）。heading は main.py から渡す #}
+{% extends "teacher_base.html" %}
+{% from "_components.html" import page_header, btn_secondary %}
+
+{% block title %}{{ heading }} | {% endblock %}
+
+{% block content %}
+{{ page_header(heading) }}
+<p class="mb-6">この画面は準備中です。</p>
+{{ btn_secondary("教材セット選択に戻る", href="/teacher") }}
+{% endblock %}

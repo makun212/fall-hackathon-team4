@@ -1,0 +1,81 @@
+{# 教師用：作成した（確定済みの）教材セットの一覧。material_sets は main.py の get_confirmed_material_sets() から渡す #}
+{# 教材セット: id、title、range_label、question、created_label、roles（name、features、image、edited） #}
+{% extends "teacher_base.html" %}
+{% from "_components.html" import page_header, btn_primary, btn_secondary, avatar, badge %}
+
+{# 移動先は、ここだけで定義する #}
+{% set back_url = "/teacher" %}
+{% set new_url = "/teacher/materials" %}
+
+{# 授業の画面へのURL。URLを変えるときはここだけ直す #}
+{% macro lesson_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/lesson{% endmacro %}
+
+{% block title %}作成した教材セット | {% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-4">
+  {{ page_header("作成した教材セット") }}
+  {% if material_sets %}
+    <p class="mb-8 text-base text-muted">全 <span class="font-bold text-ink">{{ material_sets | length }}</span> 件</p>
+  {% endif %}
+</div>
+
+{% if not material_sets %}
+  <div class="flex flex-col items-center gap-4 px-4 py-8 bg-subtle rounded-lg text-center">
+    <p class="text-muted">作成した教材セットは、まだありません。教材を選んで、ロールを決めると、ここに表示されます。</p>
+    {{ btn_primary("教材を選ぶ", href=new_url) }}
+  </div>
+{% else %}
+  <ul class="flex flex-col gap-6">
+    {% for ms in material_sets %}
+      <li>
+        <section aria-labelledby="set-{{ loop.index }}-title" class="flex flex-col gap-4 p-6 bg-paper border border-line rounded-lg">
+          {# 見出しの行。作品名（範囲）と作成日 #}
+          <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 id="set-{{ loop.index }}-title" class="text-2xl font-bold leading-snug break-words">
+              {{ ms.title }}<span class="ml-2 text-lg font-normal text-muted">（{{ ms.range_label }}）</span>
+            </h2>
+            <p class="text-base text-muted">作成日 {{ ms.created_label }}</p>
+          </div>
+
+          {% if ms.question %}
+            <div class="px-4 py-3 bg-subtle rounded-lg">
+              <p class="text-base font-bold text-muted">生徒への問いかけ</p>
+              <p class="break-words">{{ ms.question }}</p>
+            </div>
+          {% endif %}
+
+          {# ロール。タブレット横画面（md以上）は3列 #}
+          <div>
+            <h3 class="mb-2 font-bold">ロール（{{ ms.roles | length }}つ）</h3>
+            <ul class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {% for role in ms.roles %}
+                <li class="flex flex-col gap-1.5 px-4 py-3 border border-line rounded-lg">
+                  <div class="flex items-center gap-3 min-w-0">
+                    {{ avatar(role.name[:1], role.image) }}
+                    <h4 class="min-w-0 text-lg font-bold leading-tight break-words">{{ role.name }}</h4>
+                  </div>
+                  <ul class="list-disc pl-5 text-base leading-tight">
+                    {% for feature in role.features %}
+                      <li>{{ feature }}</li>
+                    {% endfor %}
+                  </ul>
+                  {# 色だけに頼らず、文字で「編集済み」を出す #}
+                  {% if role.edited %}<div class="mt-auto pt-1">{{ badge("編集済み") }}</div>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          {# この教材セットで授業を始める。ボタンはカードの右下 #}
+          <div class="flex justify-end">
+            {{ btn_primary("授業を開始する", href=lesson_url(ms)) }}
+          </div>
+        </section>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<div class="mt-6">{{ btn_secondary("戻る", href=back_url) }}</div>
+{% endblock %}
