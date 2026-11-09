@@ -1176,7 +1176,7 @@ def chat(
     # role_id はチャット画面のフォームから届く。見つからなければ None（アイコンは「AI」になる）
     role = find_role(role_id) if role_id else None
     # TODO: ここをAIのAPI呼び出しに置き換える
-    reply = f"（ダミー）「{message}」について、豊太郎として答えます。"
+    reply = f"（ダミー）「{message}」について、{role['name'] if role else '読者'}の立場から答えます。"
     return templates.TemplateResponse(
         request,
         "_message.html",
