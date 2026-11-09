@@ -1,6 +1,5 @@
 import json
 import re
-import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -38,10 +37,6 @@ def load_seed_data():
 # 『舞姫』は、厚樹さんが用意した本文と立場に置き換える（content.py）
 SEED_DATA = apply_maihime(load_seed_data())
 
-# 仮の保存場所（サーバーのメモリ）。再起動すると消える。DBが入ったら、ロールの保存・取得の処理に差し替える
-# キーは (material_id, candidate_id)。値は {"name": ..., "features": [...]}、または None（元に戻した）
-ROLE_EDITS = {}
-ROLE_EDITS_LOCK = threading.Lock()
 
 
 def get_roles():
@@ -515,12 +510,12 @@ def get_role_candidates(material_id: str):
             candidate["features"] = edited_features[candidate["candidate_id"]]
             candidate["edited"] = True
 
-    # 2. 編集画面で保存した内容（ROLE_EDITS）があれば、上書きする。None は「元に戻した」
+    # 2. 編集画面で保存した内容（DB の role_edits）があれば、上書きする。None は「元に戻した」
+    saved_edits = db.read_role_edits(material_id)
     for candidate in candidates:
-        key = (material_id, candidate["candidate_id"])
-        if key not in ROLE_EDITS:
+        if candidate["candidate_id"] not in saved_edits:
             continue
-        saved = ROLE_EDITS[key]
+        saved = saved_edits[candidate["candidate_id"]]
         fields = candidate["original"] if saved is None else saved
         candidate["name"] = fields["name"]
         candidate["features"] = list(fields["features"])
@@ -586,10 +581,9 @@ def validate_role_edit(name: str, features):
 
 def save_role_edit(material_id: str, candidate, cleaned):
     # 編集内容を保存する。元のAIの案と同じなら None（元に戻した）を保存する
-    # TODO: DBに保存する。教材セットの保存（issue: ロールの保存・取得）と合わせる
+    # TODO: 教師ごとに分ける（Googleログイン #33 の後）。今は、同じ教材の編集を全員で共有する
     value = None if cleaned == candidate["original"] else cleaned
-    with ROLE_EDITS_LOCK:
-        ROLE_EDITS[(material_id, candidate["candidate_id"])] = value
+    db.save_role_edit(material_id, candidate["candidate_id"], value)
 
 
 def render_teacher_candidate_edit(
@@ -741,6 +735,28 @@ def read_material_set_records():
                 "question": ms.get("question") or "",
                 "created_at": ms["created_at"],
                 "roles": roles,
+            }
+        )
+
+    # DBに保存した教材セット（#13）を後ろに足す
+    for ms in db.read_material_sets():
+        material = materials.get(ms["material_id"])
+        if material is None:
+            continue
+        records.append(
+            {
+                "id": ms["id"],
+                "title": material["title"],
+                "author": material.get("author") or "",
+                "range_start": ms["range_start"],
+                "range_end": ms["range_end"],
+                "paragraph_count": len(material.get("paragraphs") or []),
+                "question": ms["question"] or "",
+                "created_at": ms["created_at"],
+                "roles": [
+                    {"name": r["name"], "features": r["features"], "image": find_static_image(r["image"]), "edited": r["edited"]}
+                    for r in ms["roles"]
+                ],
             }
         )
     return records
@@ -931,8 +947,42 @@ def teacher_candidates_confirm(
             request, material, range_type, start, end, candidates, selected_ids, error=error, status_code=422
         )
 
-    # TODO: ここで、選んだロール（と編集内容）を、教材セットとして保存する。保存後は、教材セットの選択画面に移動する
+    # 選んだロール（編集後の内容）を、教材セットとして保存する（#13）
+    by_id = {c["candidate_id"]: c for c in candidates}
+    range_start, range_end = paragraph_range(material["id"], range_type, start, end)
+    db.create_material_set(
+        chat_service.new_conversation_id(),
+        material["id"],
+        range_start,
+        range_end,
+        [
+            {
+                "role_id": candidate_id,
+                "name": by_id[candidate_id]["name"],
+                "summary": by_id[candidate_id]["summary"],
+                "features": by_id[candidate_id]["features"],
+                "image": by_id[candidate_id]["image"],
+                "edited": by_id[candidate_id]["edited"],
+            }
+            for candidate_id in selected_ids
+        ],
+        question=get_question(),
+    )
     return RedirectResponse(NEXT_AFTER_CONFIRM, status_code=303)
+
+
+def paragraph_range(material_id: str, range_type: str, start: str, end: str):
+    # 検証済みの使用範囲を、(第何段落から, 第何段落まで) にする（1から数える）
+    # 行で指定したときは、その行を含む段落の範囲にする
+    paragraphs = next((m.get("paragraphs") or [] for m in SEED_DATA.get("materials") or [] if m["id"] == material_id), [])
+    if range_type == "paragraph":
+        return int(start), int(end)
+    if range_type == "line":
+        first, last = int(start), int(end)
+        hit = [i for i, p in enumerate(paragraphs, start=1) if p["line_start"] <= last and p["line_end"] >= first]
+        if hit:
+            return hit[0], hit[-1]
+    return 1, len(paragraphs)
 
 
 def resolve_candidate_edit_request(candidate_id: str, material_id: str, range_type: str, start: str, end: str):
