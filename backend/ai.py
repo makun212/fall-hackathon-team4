@@ -13,7 +13,8 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 DEFAULT_MODEL = "gemini-3.6-flash"
 
 # 1回の呼び出しで待つ最大の時間（秒）。これを超えたら AIError にする
-TIMEOUT_SECONDS = 30
+# チャット画面は30秒で待つのをやめるので、それより短くして、先にエラーを返せるようにする
+TIMEOUT_SECONDS = 25
 
 # 返答の長さの上限（トークン数）。長すぎる返答で料金と待ち時間が増えるのを防ぐ
 MAX_OUTPUT_TOKENS = 1024
@@ -24,6 +25,11 @@ ROLE_TO_GEMINI = {"user": "user", "assistant": "model"}
 
 class AIError(Exception):
     # AIの呼び出しに失敗したとき。message は、そのまま画面に出してよい文にする
+    pass
+
+
+class AIBusyError(AIError):
+    # 混み合っている・回数の上限に達したとき（429）。少し待てば直る
     pass
 
 
@@ -70,7 +76,7 @@ def call_gemini(system_prompt: str, messages, config_extra=None):
         )
     except errors.APIError as e:
         if e.code == 429:
-            raise AIError("AIが混み合っています。少し待ってから、もう一度送ってください。") from e
+            raise AIBusyError("AIが混み合っています。少し待ってから、もう一度送ってください。") from e
         raise AIError("AIが応答できませんでした。もう一度送ってください。") from e
     except AIError:
         raise

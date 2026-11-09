@@ -70,6 +70,8 @@
       <label for="chat-message" class="sr-only">メッセージ</label>
       {# 返事の吹き出しに相手のアイコンを出すため、ロールも一緒に送る #}
       {% if role_id %}<input type="hidden" name="role_id" value="{{ role_id }}">{% endif %}
+      {# 会話の ID。AI が前のやり取りを覚えておくために使う（main.py の student_chat で作る） #}
+      {% if conversation_id %}<input type="hidden" name="conversation_id" value="{{ conversation_id }}">{% endif %}
       <div class="flex gap-3">
         <input id="chat-message" name="message" required maxlength="200" autocomplete="off"
                placeholder="選んだ立場のAIに話しかけてみよう" aria-describedby="chat-count"
