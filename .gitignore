@@ -151,3 +151,6 @@ vite.config.ts.timestamp-*
 .env
 .venv/
 __pycache__/
+
+# 手元のDB（SQLite）
+backend/app.db

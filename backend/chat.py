@@ -1,23 +1,17 @@
 import re
-import threading
 import uuid
-from collections import OrderedDict
 
 import ai
+import db
 from prompts import build_system_prompt
 
 # 生徒とAIの対話（#19）。main.py の /chat から reply() を呼ぶ
-# 会話の履歴は、DBが入るまでサーバーのメモリに置く（再起動すると消える）。DBに移すときは、下の3つの関数だけ直す
+# 会話の履歴は DB（db.py）に保存する（#20）
 
 # AIに渡す過去のメッセージの数（生徒とAIの発言を合わせた数）。多いほど前の話を覚えているが、遅く高くなる
 HISTORY_MAX = 20
-# メモリに置いておく会話の数。超えたら、いちばん長く使われていない会話から消す
-CONVERSATIONS_MAX = 500
 # 会話の ID の形（uuid4 の16進数32文字）。それ以外は受け付けない
 CONVERSATION_ID_PATTERN = re.compile(r"[0-9a-f]{32}")
-
-_histories = OrderedDict()
-_lock = threading.Lock()
 
 
 def new_conversation_id() -> str:
@@ -30,20 +24,7 @@ def is_valid_conversation_id(conversation_id) -> bool:
 
 
 def read_history(conversation_id: str):
-    with _lock:
-        return list(_histories.get(conversation_id, []))
-
-
-def save_turn(conversation_id: str, user_message: str, reply_text: str):
-    # 1往復分を、会話の最後に足す
-    with _lock:
-        history = _histories.setdefault(conversation_id, [])
-        history.append({"role": "user", "content": user_message})
-        history.append({"role": "assistant", "content": reply_text})
-        del history[:-HISTORY_MAX]
-        _histories.move_to_end(conversation_id)
-        while len(_histories) > CONVERSATIONS_MAX:
-            _histories.popitem(last=False)
+    return db.read_messages(conversation_id, HISTORY_MAX)
 
 
 def reply(conversation_id: str, role: dict, material_text: str, message: str) -> str:
@@ -51,5 +32,9 @@ def reply(conversation_id: str, role: dict, material_text: str, message: str) ->
     system_prompt = build_system_prompt(role, material_text)
     messages = read_history(conversation_id) + [{"role": "user", "content": message}]
     reply_text = ai.generate(system_prompt, messages)
-    save_turn(conversation_id, message, reply_text)
+    db.save_messages(
+        conversation_id,
+        role["id"],
+        [{"role": "user", "content": message}, {"role": "assistant", "content": reply_text}],
+    )
     return reply_text
