@@ -1,37 +1,31 @@
 {# チャットの1往復分（htmx で #chat の末尾に追加される）。user_message / reply / role（任意）/ evidence（任意）は main.py から渡す #}
-{% from "_components.html" import btn_secondary, avatar %}
+{# 発言1件の見た目は _components.html の chat_msg（基準HTMLの .ch-msg と同じ形）。#typing（index.html）もこの見た目にそろえる #}
+{% from "_components.html" import chat_msg %}
 
 {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
 {% set role_name = role["name"] if role else None %}
 {% set role_image = role["image"] if role else None %}
 
-{# 自分の発言（右側の吹き出し。右上の角だけ小さくして、しっぽに見せる） #}
-<div class="flex justify-end pl-16">
-  <p class="max-w-[80%] px-4 py-2 bg-accent-soft rounded-2xl rounded-tr-sm whitespace-pre-wrap break-words">{{ user_message }}</p>
-</div>
+{# 自分の発言（右寄せ。丸は出さない） #}
+{{ chat_msg("me", "あなた", user_message) }}
 
-{# 相手の発言（左にアイコン、左上の角だけ小さくして、アイコンから出たしっぽに見せる） #}
-<div class="flex items-start gap-3 pr-16">
-  {{ avatar(role_name[:1] if role_name else "AI", role_image) }}
-  <div class="min-w-0 flex flex-col items-start gap-2">
-    <p class="text-base font-bold text-muted leading-snug">{{ role_name or "AI" }}</p>
-    <p class="px-4 py-2 bg-paper border border-line rounded-2xl rounded-tl-sm whitespace-pre-wrap break-words">{{ reply }}</p>
-
-  {# 根拠があるときだけボタンを出す。押すと、下の template の中身が右側の根拠パネルに入る（index.html の script） #}
+{# 相手の発言（左に頭文字の丸） #}
+{% call chat_msg("ai", role_name or "AI", reply, role_name[:1] if role_name else "AI", role_image) %}
+  {# 根拠があるときだけボタンを出す。押すと、下の template の中身が根拠パネルに入る（index.html の script） #}
   {% if evidence %}
-    <div data-evidence>
-      {{ btn_secondary("根拠を表示する") }}
+    <div data-evidence class="mt-1">
+      <button type="button" class="inline-flex items-center justify-center min-h-11 px-4 rounded-[10px] border border-rose-line bg-cream-paper text-sm font-bold text-crimson-dark cursor-pointer hover:bg-kinari focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink">根拠を表示する</button>
       <template>
-        <ul class="flex flex-col gap-4">
+        <ul class="m-0 p-0 list-none flex flex-col gap-4">
           {% for item in evidence %}
             {# 根拠のキー名を参照するのはここだけ。キー名が変わったらここを直す #}
             {% set quote_text = item.quote_text %}
             {% set location = item.location %}
 
             <li class="flex flex-col gap-1">
-              <blockquote class="pl-3 border-l-2 border-accent whitespace-pre-wrap">{{ quote_text }}</blockquote>
+              <blockquote class="m-0 pl-3 border-l-2 border-crimson leading-[1.8] whitespace-pre-wrap [overflow-wrap:anywhere]">{{ quote_text }}</blockquote>
               {% if location %}
-                <p class="pl-3 text-base text-muted">{{ location }}</p>
+                <p class="m-0 pl-3 text-[13px] text-sepia-muted">{{ location }}</p>
               {% endif %}
             </li>
           {% endfor %}
@@ -39,5 +33,4 @@
       </template>
     </div>
   {% endif %}
-  </div>
-</div>
+{% endcall %}

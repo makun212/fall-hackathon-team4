@@ -73,12 +73,21 @@
 教師用の画面は、`templates/teacher_base.html` を継承します（上部バーに「教師用」のバッジとナビが付きます）。
 教師用のトップ（教材セット選択、`teacher_home.html`）は、本棚の見た目にするため、上のルールの例外として次を使います。
 
-- 色：`base.html` の `@theme` の「教師用の画面だけで使う」色（`crimson`、`kinari`、`cream`、`gold`、`wood`、`book-*` など）。教師用の上部バーと教材セット選択の画面以外では使わない
+- 色：`base.html` の `@theme` の「教師用の画面だけで使う」色（`crimson`、`kinari`、`cream`、`gold`、`wood`、`book-*` など）。教師用の上部バーと教材セット選択の画面、下の「生徒の画面の例外」以外では使わない
 - 文字：見出しと背表紙に明朝（`font-serif`。システムフォント）。外部フォントは読み込まない
 - 影：選択中の本と棚板だけに付ける
 - ボタン：「新規作成」「セットを編集」「授業開始」は部品を使わず、画面に合わせて class で書く（高さ48px以上は守る）
 
 CSSファイルは作らないルールは、教師用の画面でも同じです（縦書きや持ち上がりも class で書いています）。
+
+## 生徒の画面の例外（ロール選択・問いかけ・チャット）
+
+`role_select.html`・`student_question.html`・`index.html`（チャット）は、それぞれの見た目の基準HTMLに合わせて、上のルールの例外として次を使います。
+
+- 色：教師用の画面と同じ `crimson`、`kinari`、`cream`、`gold` など。チャットの「送信」の書く前の色（`#D9CDB8`・`#C9B99C`）と入力欄の placeholder（`#7A6A58`）だけは、基準HTMLの値を直書きしている
+- 文字：Google Fonts の Noto Sans JP（本文）／Noto Serif JP（題名・見出し）を、その画面の `head` ブロックで読み込む
+- ボタン：部品を使わず、画面に合わせて class で書く（高さ48px以上は守る）。「送信」などの見た目の切り替えは `:placeholder-shown` と `group-has-*` だけで行い、JS の `disabled` は使わない
+- チャットの発言1件は `_components.html` の `chat_msg(kind, who, text, avatar_text=None, image=None)`、頭文字の丸は `chat_avatar(text, image=None)` で出す。htmx で追加される `_message.html` もこれを使う
 
 ## ウェルカム画面の例外
 
