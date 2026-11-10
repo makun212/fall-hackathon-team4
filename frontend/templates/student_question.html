@@ -8,7 +8,6 @@
 {% set role_name = role["name"] %}
 {% set role_summary = role["summary"] %}
 {% set role_image = role["image"] %}
-{% set material_set_id = role["material_set_id"] %}
 
 {% block title %}対話をする前に | {% endblock %}
 
@@ -55,7 +54,7 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
-      {{ btn_secondary("ロールを選び直す", href="/student/roles?set=" ~ material_set_id|urlencode) }}
+      {{ btn_secondary("ロールを選び直す", href="/student/roles") }}
       {{ btn_primary("対話を始める") }}
     </div>
   </form>

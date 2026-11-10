@@ -8,7 +8,7 @@
 {% set role_id = role["id"] if role else None %}
 {% set role_image = role["image"] if role else None %}
 {# 感想入力の画面への移動先は、ここだけで定義する #}
-{% set reflection_url = "/student/reflection?role_id=" ~ role_id|urlencode if role_id else None %}
+{% set reflection_url = "/student/reflection?role_id=" ~ role_id|urlencode ~ ("&conversation_id=" ~ conversation_id|urlencode if conversation_id else "") if role_id else None %}
 
 {% block title %}チャット | {% endblock %}
 
@@ -70,6 +70,8 @@
       <label for="chat-message" class="sr-only">メッセージ</label>
       {# 返事の吹き出しに相手のアイコンを出すため、ロールも一緒に送る #}
       {% if role_id %}<input type="hidden" name="role_id" value="{{ role_id }}">{% endif %}
+      {# 会話の ID。AI が前のやり取りを覚えておくために使う（main.py の student_chat で作る） #}
+      {% if conversation_id %}<input type="hidden" name="conversation_id" value="{{ conversation_id }}">{% endif %}
       <div class="flex gap-3">
         <input id="chat-message" name="message" required maxlength="200" autocomplete="off"
                placeholder="選んだ立場のAIに話しかけてみよう" aria-describedby="chat-count"
