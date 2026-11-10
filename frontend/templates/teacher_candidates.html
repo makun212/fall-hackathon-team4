@@ -1,22 +1,23 @@
-{# 教師用：ロールの選択画面（Figma 5）。値はすべて main.py の render_teacher_candidates() から渡す（検証済み） #}
+{# 教師用：ロールの選択画面（見た目の基準は「ロール候補の選択 K1 栞カード」）。値はすべて main.py の render_teacher_candidates() から渡す（検証済み） #}
 {# material: get_material() の値 / range_type・start・end: 使用範囲 / range_label: 範囲の表示用の文章 #}
 {# candidates: get_role_candidates() の値（最大6つ） / selected_ids: 選択済みの候補ID / error: エラーの文章（なければ None） #}
 {# select_max: 選ぶロールの数（main.py の ROLE_SELECT_MAX）。チームの決定で、ちょうどこの数を選ぶ（送信時のチェックはバックエンドで対応予定） #}
 {% extends "teacher_base.html" %}
-{% from "_components.html" import page_header, btn_primary, btn_secondary, avatar, badge %}
+{% set nav_current = "materials" %}
+{# 教材の制作中は、生徒のチャット一覧へは行かない #}
+{% set hide_nav = ["chats"] %}
 
 {# 移動先・送信先は、ここだけで定義する #}
 {% set confirm_url = "/teacher/candidates/confirm" %}
 {% set materials_url = "/teacher/materials" %}
 
 {% block title %}ロールの選択 | {% endblock %}
+{% block body_class %}bg-cream text-sepia{% endblock %}
+
+{% set focus_cls = "focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink" %}
 
 {% block content %}
-{# タブレットの横画面（1180×820）で、スクロールせずに、候補6つ（3列×2段）と右下のボタンまで見えるようにしている #}
-{# 実測（Windows の Chrome、1180×820）では、エラーの表示があるときも、中身は画面の高さに収まる #}
-{# 高さを抑えるため、作品名（範囲）は見出しの横に置き、カードの「使う」「選択中」「編集する」は、カードの下の行にまとめている #}
-{# base.html・見出し・カードの中身（文字の大きさや行数）を変えたら、高さを見直す #}
-<form id="candidates-form" method="post" action="{{ confirm_url }}" class="flex flex-col gap-4">
+<form id="candidates-form" method="post" action="{{ confirm_url }}" class="flex flex-col gap-[18px] text-base">
   {# 教材と範囲は、確定（POST）と編集画面（GET）の両方に引き継ぐ #}
   <input type="hidden" name="material_id" value="{{ material.id }}">
   <input type="hidden" name="range_type" value="{{ range_type }}">
@@ -25,87 +26,86 @@
     <input type="hidden" name="end" value="{{ end }}">
   {% endif %}
 
-  {# 見出しと作品名（範囲）。page_header の下の余白（mb-8）を打ち消して、間隔は form の gap にそろえる #}
-  <div class="flex flex-wrap items-baseline gap-x-4 -mb-8 min-w-0">
-    {{ page_header("ロールの選択") }}
-    <p class="text-muted break-words">{{ material.title }}（{{ range_label }}）</p>
+  {# 見出しと作品名（範囲） #}
+  <div class="flex flex-wrap items-baseline gap-x-3.5 gap-y-1.5 min-w-0">
+    <h1 class="m-0 pb-1.5 border-b-3 border-crimson font-serif text-[26px] font-bold leading-snug">ロールの選択</h1>
+    <p class="m-0 text-[15px] text-sepia-muted [overflow-wrap:anywhere]">{{ material.title }}（{{ range_label }}）</p>
   </div>
 
   {% if not candidates %}
-    <p class="px-4 py-8 bg-subtle rounded-lg text-center text-muted">ロールの候補がありません。教材を選び直してください。</p>
+    <p class="px-4 py-8 bg-cream-paper border border-cream-line rounded-xl text-center text-sepia-muted">ロールの候補がありません。教材を選び直してください。</p>
   {% else %}
-    {# 説明の行。エラーがあるときは、説明の代わりにエラーを出す（高さを増やさないため） #}
-    <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
-      {% if error %}
-        <div role="alert" class="flex items-center gap-3 px-4 py-1 bg-accent-soft border border-accent rounded-lg text-ink">
-          <span class="shrink-0 inline-flex items-center justify-center size-6 rounded-full bg-accent text-paper text-base font-bold" aria-hidden="true">！</span>
-          <p>{{ error }}</p>
-        </div>
-      {% else %}
-        <p>生徒との対話に使うロールを、{{ select_max }}つ選んでください。生徒は、この{{ select_max }}つから選びます。</p>
-      {% endif %}
-      <p class="shrink-0 tabular-nums" aria-live="polite">
-        <span class="font-bold">選択中 <span id="selected-count">{{ selected_ids | length }}</span> / {{ select_max }}</span>
-        {# 上限まで選んだときの案内。文字は JavaScript が textContent で入れる #}
-        <span id="selected-limit" class="ml-2 text-muted" data-text="これ以上は選べません"></span>
+    {# 説明の行。右に「選択中 n / 3」 #}
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <p class="m-0 text-sm leading-[1.7]">生徒との対話に使うロールを、{{ select_max }}つ選んでください。生徒は、この{{ select_max }}つから選びます。</p>
+      <p class="m-0 shrink-0 text-sm font-bold tabular-nums" aria-live="polite">
+        <span>選択中 <span id="selected-count">{{ selected_ids | length }}</span> / {{ select_max }}</span>
       </p>
     </div>
 
-    {# タブレット横画面（md以上）は3列 #}
-    <ul class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    {# 案内文の場所（空のときも高さを確保）。送信エラーと、上限まで選んだときの案内（JS が textContent で入れる）を出す #}
+    <div class="-mt-2 min-h-5 text-[13px] leading-normal text-crimson-dark" aria-live="polite">
+      {% if error %}<p role="alert" class="m-0">{{ error }}</p>{% endif %}
+      <p id="selected-limit" class="m-0" data-text="{{ select_max }}つ選んでいます。変えるときは、どれかの「使う」を外してください。"></p>
+    </div>
+
+    {# 1024px以上は3列、640px以上は2列、それより狭いと1列。pt は、選択中のカードが持ち上がる分と栞の分 #}
+    <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-[22px] m-0 p-0 pt-1.5 list-none">
       {% for c in candidates %}
         {# 候補のキー名は main.py の get_role_candidates() でそろえてある #}
         {% set checkbox_id = "candidate-" ~ loop.index %}
-        <li class="group relative bg-paper border border-line rounded-lg hover:border-accent has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-accent">
-          {# 「編集する」のボタン以外は、どこを押しても選べる #}
-          {# 上限まで選んだあと、選んでいないカードは押せない見た目にする（has-[:disabled]） #}
-          <label for="{{ checkbox_id }}" class="h-full flex flex-col gap-1.5 px-4 pt-3 pb-2.5 cursor-pointer has-[:disabled]:opacity-50 has-[:disabled]:cursor-not-allowed">
-            {# ロール名は2行まで。2行でも丸い画像（48px）より高くならない文字の大きさと行の高さにしている #}
-            {# 文字数の上限は main.py の ROLE_NAME_MAX・ROLE_FEATURE_MAX（このカードに収まる長さ）。上限を超えるデータが来ても崩れないよう、2行で切る #}
-            <div class="flex items-center gap-3 min-w-0">
-              {{ avatar(c.name[:1], c.image) }}
-              <h2 class="min-w-0 text-lg font-bold leading-tight break-words line-clamp-2">{{ c.name }}</h2>
-            </div>
-            {# 特徴は1つ2行まで（3つで最大6行）。6行でも2段が画面に収まるよう、行の高さを詰めている #}
-            <ul class="flex-1 list-disc pl-5 text-base leading-tight">
-              {% for feature in c.features %}
-                {# line-clamp は li に付けると「・」が消えるため、中の span に付ける #}
-                <li><span class="line-clamp-2">{{ feature }}</span></li>
-              {% endfor %}
-            </ul>
-            {# カードの下の行（左）。チェックボックスと「選択中」。右は「編集する」のボタンのために空けておく（pr-32） #}
-            {# チェックボックスの押せる範囲は44px以上（min-h-11） #}
-            <div class="flex items-center gap-3 min-h-12 pr-32">
-              <span class="inline-flex items-center gap-2 min-h-11 min-w-11 font-bold">
-                <input type="checkbox" id="{{ checkbox_id }}" name="selected" value="{{ c.candidate_id }}"
-                       aria-label="{{ c.name }}を使う"
-                       class="size-5 accent-accent focus-visible:outline-none"{% if c.candidate_id in selected_ids %} checked{% endif %}>
-                <span aria-hidden="true">使う</span>
-              </span>
-              {# 色だけに頼らず、「選択中」の文字も出す #}
-              <span class="hidden group-has-[:checked]:inline-flex">{{ badge("選択中", "accent") }}</span>
-            </div>
-          </label>
+        {# 選択中は、持ち上がり・栞・金の縁・チェックの印で示す（:has が使えないブラウザでも、チェックの印は変わる） #}
+        <li class="group relative flex flex-col gap-3 px-5 pt-5 pb-4 bg-cream-paper border border-cream-line rounded-xl transition duration-200 ease-in-out motion-reduce:transition-none
+                   has-checked:-translate-y-1.5 motion-reduce:has-checked:translate-y-0 has-checked:bg-kinari has-checked:border-gold has-checked:shadow-[0_0_0_2px_var(--color-gold),0_10px_16px_rgb(90_58_30/0.2)]
+                   has-[input:focus-visible]:outline-3 has-[input:focus-visible]:outline-offset-3 has-[input:focus-visible]:outline-ink">
+          {# 栞（飾り） #}
+          <svg class="hidden group-has-checked:block absolute -top-2 right-[18px] drop-shadow-[0_2px_2px_rgb(0_0_0/0.25)]" aria-hidden="true" width="28" height="42" viewBox="0 0 30 46"><path d="M0 0H30V46L15 37L0 46Z" fill="#A61E22"/></svg>
 
-          {# カードの下の行（右）。ラベルの外に置く。チェックの状態と教材・範囲を、GETのクエリとして編集画面に引き継ぐ（JavaScriptなしで動く） #}
-          <div class="absolute bottom-2.5 right-4">
-            {{ btn_secondary("編集する", attrs={
-              "type": "submit",
-              "formaction": "/teacher/candidates/" ~ (c.candidate_id | urlencode) ~ "/edit",
-              "formmethod": "get",
-              "aria-label": c.name ~ "を編集する",
-            }) }}
+          <div class="flex items-center gap-3 pr-[30px] min-w-0">
+            {# 頭文字の丸。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+            <span class="relative flex-none flex items-center justify-center size-[38px] overflow-hidden rounded-full bg-crimson font-serif text-base font-bold text-kinari" aria-hidden="true">
+              {{ c.name[:1] }}
+              {% if c.image %}<img src="/static/{{ c.image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">{% endif %}
+            </span>
+            <h2 class="m-0 min-w-0 font-serif text-base font-bold leading-normal [word-break:auto-phrase] text-balance [overflow-wrap:anywhere]">{{ c.name }}</h2>
+          </div>
+
+          {# 見方。文が長くても、カードの高さが伸びる #}
+          <ul class="flex flex-col gap-1.5 m-0 p-0 list-none">
+            {% for feature in c.features %}
+              <li class="relative pl-4 text-sm leading-[1.7] [overflow-wrap:anywhere] before:content-[''] before:absolute before:left-0.5 before:top-[9px] before:size-1.5 before:rounded-full before:bg-crimson">{{ feature }}</li>
+            {% endfor %}
+          </ul>
+
+          {# カードの下の行。左に「使う」、右に「編集する」 #}
+          <div class="mt-auto pt-1.5 flex items-center justify-between gap-2.5">
+            {# チェックボックス自体は見えなくして、横の四角い印で表す。上限まで選ぶと、選んでいないものは押せなくなる（既存のJS） #}
+            <label for="{{ checkbox_id }}" class="relative inline-flex items-center gap-2.5 min-h-11 cursor-pointer text-[15px] font-bold has-disabled:cursor-not-allowed has-disabled:text-[#7A6A58]">
+              <input type="checkbox" id="{{ checkbox_id }}" name="selected" value="{{ c.candidate_id }}"
+                     aria-label="{{ c.name }}を使う"
+                     class="peer absolute size-px m-0 opacity-0"{% if c.candidate_id in selected_ids %} checked{% endif %}>
+              <span class="flex-none flex items-center justify-center size-[22px] border-2 border-[#8A7A68] rounded-[5px] bg-cream-paper text-[15px] leading-none text-transparent peer-checked:bg-crimson peer-checked:border-crimson peer-checked:text-kinari peer-disabled:bg-[#F1EADB] peer-disabled:border-[#D9CDB8]" aria-hidden="true">✓</span>
+              <span aria-hidden="true">使う</span>
+            </label>
+
+            {# チェックの状態と教材・範囲を、GETのクエリとして編集画面に引き継ぐ（JavaScriptなしで動く） #}
+            <button type="submit" formaction="/teacher/candidates/{{ c.candidate_id | urlencode }}/edit" formmethod="get" aria-label="{{ c.name }}を編集する"
+                    class="inline-flex items-center justify-center min-h-11 px-5 border border-rose-line rounded-[10px] bg-cream-paper text-sm font-bold text-crimson-dark cursor-pointer hover:bg-rose-soft {{ focus_cls }}">編集する</button>
           </div>
         </li>
       {% endfor %}
     </ul>
   {% endif %}
 
-  {# 操作の行。左：教材を選び直す、右下：この内容で追加する #}
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    {{ btn_secondary("教材を選び直す", href=materials_url) }}
+  {# 操作の行。左：教材を選び直す、右：この内容で追加する。640px以下は縦に積み、「追加する」を上にする #}
+  <div class="flex flex-wrap items-center justify-between gap-3 max-sm:flex-col-reverse max-sm:items-stretch">
+    <a href="{{ materials_url }}" class="inline-flex items-center justify-center min-h-[52px] px-7 border border-rose-line rounded-[10px] bg-cream-paper text-[15px] font-bold text-crimson-dark hover:bg-rose-soft {{ focus_cls }} max-sm:w-full">教材を選び直す</a>
     {% if candidates %}
-      {{ btn_primary("この内容で追加する", attrs={"type": "submit"}) }}
+      <div class="flex flex-wrap items-center gap-3 max-sm:flex-col-reverse max-sm:items-stretch">
+        {# 押せない理由の文の場所（今は押せないことが無いので空） #}
+        <span class="text-[13px] text-sepia-muted max-sm:text-center empty:hidden"></span>
+        <button type="submit" class="inline-flex items-center justify-center min-h-[52px] px-9 border-0 border-b-3 border-gold rounded-[10px] bg-crimson text-[17px] font-bold tracking-[0.04em] text-white cursor-pointer hover:bg-crimson-dark {{ focus_cls }} disabled:bg-[#D9CDB8] disabled:text-sepia-muted disabled:border-[#C9B99C] disabled:cursor-not-allowed max-sm:w-full">この内容で追加する</button>
+      </div>
     {% endif %}
   </div>
 </form>
