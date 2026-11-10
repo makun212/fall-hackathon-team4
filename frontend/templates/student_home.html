@@ -1,97 +1,166 @@
-{# 生徒用のトップ：左に教師が作った教材セットの一覧、右に選んだセットの中身（タイトル・作者名・概要・ロール名） #}
+{# 生徒用のトップ（S1）：左に本棚（教師が作った教材セット）、右に選んだセットの中身（タイトル・作者名・概要・ロール名） #}
+{# 見た目の基準は docs/reference/student-S1.html。本棚の書き方は教師用の _teacher_shelves.html に合わせている #}
 {# material_sets は main.py の student_home() から渡す（形は get_confirmed_material_sets() と同じ） #}
 {# 選ぶセットは URL の ?set= で決める。なければ一覧の先頭（一番新しいセット） #}
-{# 一覧の項目を押すと、htmx で #student-dashboard だけを差し替える（JavaScript が動かなくても、ふつうのリンクとして動く） #}
+{# 本を押すと、htmx で #student-dashboard だけを差し替える。本棚も #student-dashboard の中にあるので、選択中の本（aria-pressed）も一緒に更新される #}
+{# JavaScript が動かなくても、本は GET のフォームとして /student?set=… に移動する #}
 {% extends "base.html" %}
-{% from "_components.html" import page_header, btn_primary, btn_secondary, avatar, badge %}
 
 {% set selected_id = request.query_params.get("set", "") %}
 {% set selected = (material_sets | selectattr("id", "equalto", selected_id) | list | first) or (material_sets | first) if material_sets else none %}
 
 {% block title %}教材をえらぶ | {% endblock %}
 
+{% block head %}
+{# 書体：デザインの基準は Noto Sans JP（本文）／Noto Serif JP（見出し・背表紙）。今後は使わない見込みのため、読み込みは止めておき、base.html の font-sans / font-serif（システムフォント）を使う
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+#}
+{#
+配色：デザインの基準の色は、すべて base.html の @theme にある名前で書いている（任意の値 bg-[#…] は使わない）
+  深紅 #A61E22 = crimson ／ 濃い赤 #8E1B1F = crimson-dark ／ 生成り #FBF1DC = kinari ／ 背景 #F7F0E3 = cream
+  紙の白 #FFFDF8 = cream-paper ／ 金 #E4C26A = gold ／ 文字 #2B2118 = sepia ／ 補助文字 #5C4B3B = sepia-muted
+  木の色 #8A5A2B = wood ・ #5A3A1E = wood-dark ・ #A8763B = wood-light
+#}
+{% endblock %}
+
+{% block body_class %}bg-cream text-sepia{% endblock %}
+
+{# 上部バー：base.html のヘッダーと同じ中身で、背景を紙の白、下線を深紅にする #}
+{% block header %}
+<header class="bg-cream-paper border-b-2 border-crimson text-sepia">
+  <div class="max-w-6xl mx-auto px-8">
+    <a href="/" class="inline-flex items-center min-h-14 font-serif text-xl font-bold tracking-[0.08em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">よみより</a>
+  </div>
+</header>
+{% endblock %}
+
 {% block content %}
-{{ page_header("教材をえらぶ") }}
-<p class="-mt-4 mb-5 text-muted">左の一覧から教材を1つ選ぶと、右にその中身が出ます。</p>
+{# 背表紙の色（背景・文字・上下の帯）。セットの並び順に使い、6冊ごとに最初に戻る #}
+{% set spine_styles = [
+  {"bg": "bg-kinari", "text": "text-crimson", "band": "bg-crimson"},
+  {"bg": "bg-book-navy", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-crimson", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-book-green", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-book-brown", "text": "text-kinari", "band": "bg-gold"},
+  {"bg": "bg-book-blue", "text": "text-kinari", "band": "bg-gold"},
+] %}
+{# 1段に5冊。教材がなくても、空の棚を1段は見せる #}
+{% set books_per_row = 5 %}
+{% set rows = material_sets | batch(books_per_row) | list %}
+{% set rows = rows if rows else [[]] %}
+{# 本と空き場所の大きさ。480px未満は幅40〜56pxで均等に縮め、高さ144px。480px以上は幅56px・高さ176px #}
+{% set book_size = "flex-1 min-w-10 max-w-14 h-36 xs:flex-none xs:w-14 xs:h-44" %}
+
+<div class="flex flex-col gap-1 mb-[18px]">
+  <h1 class="m-0 font-serif text-[26px] font-bold leading-snug">教材をえらぶ</h1>
+  <p class="m-0 text-[13px] text-sepia-muted">左の本棚から本を1冊選ぶと、右にその中身が出ます。</p>
+</div>
 
 <div id="student-dashboard" class="flex flex-col lg:flex-row lg:items-start gap-6">
-  {# 左：教材セットの一覧 #}
-  <nav aria-label="教材セットの一覧" class="lg:w-80 shrink-0 flex flex-col gap-3">
-    <h2 class="flex items-center gap-2 text-xl font-bold">
-      教材セット
-      {{ badge(material_sets | length ~ "件") }}
-    </h2>
+  {# 左：本棚。本の1冊1冊が、セットを選ぶボタン #}
+  <nav aria-labelledby="shelves-title" class="w-full lg:w-[440px] lg:flex-none flex flex-col gap-2.5">
+    <div class="p-3 bg-wood rounded-[10px]">
+      {# 本棚の看板。ボタンではない #}
+      <div class="flex items-center justify-between gap-2.5 px-1.5 pt-1 pb-3">
+        <h2 id="shelves-title" class="font-serif text-lg font-bold tracking-[0.1em] text-kinari">教材セット</h2>
+        <span class="px-3 py-0.5 border border-gold rounded-full text-xs font-bold text-kinari">{{ material_sets | length }}冊</span>
+      </div>
+
+      {% for row in rows %}
+        {% set row_index = loop.index0 %}
+        <div class="bg-wood-dark rounded px-3.5 pt-4{% if not loop.first %} mt-2.5{% endif %}">
+          {# 上の余白は、選択中の本が持ち上がる分 #}
+          <div class="flex items-end gap-2 xs:gap-2.5 h-44 xs:h-52 px-1.5">
+            {% for ms in row %}
+              {% set style = spine_styles[(row_index * books_per_row + loop.index0) % spine_styles | length] %}
+              {% set is_selected = selected is not none and ms.id == selected.id %}
+              {% set set_url = "/student?set=" ~ (ms.id | urlencode) %}
+              {# JavaScript が動かないときは、このフォームで /student?set=… に移動する。htmx のときは、button の hx-get だけが使われる（GET ではフォームの値は送られない） #}
+              <form method="get" action="/student" class="contents">
+                <input type="hidden" name="set" value="{{ ms.id }}">
+                {# id は、差し替えたあとも同じ本にフォーカスを戻すため #}
+                <button type="submit"
+                        id="book-{{ ms.id }}"
+                        aria-pressed="{{ 'true' if is_selected else 'false' }}"
+                        aria-label="{{ ms.title }}{% if ms.author %}（{{ ms.author }}）{% endif %}を選ぶ"
+                        hx-get="{{ set_url }}" hx-select="#student-dashboard" hx-target="#student-dashboard" hx-swap="outerHTML" hx-push-url="true"
+                        class="{{ book_size }} p-0 border-0 flex flex-col items-center justify-between overflow-hidden rounded-t-[3px] rounded-b-[2px] cursor-pointer transition duration-200 ease-in-out motion-reduce:transition-none not-aria-pressed:hover:-translate-y-1.5 aria-pressed:-translate-y-4 aria-pressed:ring-2 aria-pressed:ring-gold aria-pressed:shadow-[0_8px_10px_rgb(0_0_0/0.35)] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#FFF8E7] {{ style.bg }}">
+                  <span class="w-full h-[7px] shrink-0 {{ style.band }}" aria-hidden="true"></span>
+                  <span class="[writing-mode:vertical-rl] max-h-full overflow-hidden tracking-[0.18em] font-serif text-base font-bold {{ style.text }}" aria-hidden="true">{{ ms.title }}</span>
+                  <span class="w-full h-[7px] shrink-0 {{ style.band }}" aria-hidden="true"></span>
+                </button>
+              </form>
+            {% endfor %}
+            {# 空いている場所（1段5冊のうち、残り）。装飾なので aria-hidden #}
+            {% for _ in range([books_per_row - row | length, 0] | max) %}
+              <div class="{{ book_size }} border-2 border-dashed border-gold/45 rounded-[3px]" aria-hidden="true"></div>
+            {% endfor %}
+          </div>
+          {# 棚板 #}
+          <div class="h-3.5 -mx-3.5 bg-wood-light shadow-[0_3px_0_var(--color-wood-shadow)]" aria-hidden="true"></div>
+        </div>
+      {% endfor %}
+    </div>
     {% if material_sets %}
-      <ul class="flex flex-col gap-2">
-        {% for ms in material_sets %}
-          {% set is_selected = selected is not none and ms.id == selected.id %}
-          {% set set_url = "/student?set=" ~ (ms.id | urlencode) %}
-          <li>
-            <a href="{{ set_url }}"
-               hx-get="{{ set_url }}" hx-select="#student-dashboard" hx-target="#student-dashboard" hx-swap="outerHTML" hx-push-url="true"
-               {% if is_selected %}aria-current="true"{% endif %}
-               class="flex flex-col gap-0.5 min-h-12 px-4 py-3 border rounded-lg hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent {{ 'border-accent bg-accent-soft' if is_selected else 'border-line bg-paper' }}">
-              <span class="flex items-center justify-between gap-2">
-                <span class="text-lg font-bold leading-snug break-words">{{ ms.title }}</span>
-                {% if is_selected %}{{ badge("選択中", "accent") }}{% endif %}
-              </span>
-              {% if ms.author %}<span class="text-base text-muted">{{ ms.author }}</span>{% endif %}
-            </a>
-          </li>
-        {% endfor %}
-      </ul>
+      <p class="m-0 text-[13px] leading-[1.7] text-sepia-muted">先生が公開した教材が、ここに並びます。</p>
     {% else %}
-      <p class="text-base text-muted">先生が作った教材は、まだありません。</p>
+      <p class="m-0 text-[13px] leading-[1.7] text-sepia-muted">先生が作った教材は、まだありません。</p>
     {% endif %}
   </nav>
 
   {# 右：選んだセットの中身 #}
-  <section aria-live="polite" aria-label="選んでいる教材の中身" class="flex-1 min-w-0 flex flex-col gap-5 p-6 bg-paper border border-line rounded-lg">
+  <section aria-live="polite" aria-label="選んでいる教材の中身" class="flex-1 min-w-0 lg:min-h-[380px] flex flex-col gap-[18px] p-[26px] bg-cream-paper border border-cream-line rounded-xl">
     {% if selected is none %}
-      <p class="text-muted">教材が用意されるまで、少し待ってください。</p>
+      <p class="text-base text-sepia-muted">教材が用意されるまで、少し待ってください。</p>
     {% else %}
-      <div class="flex flex-col gap-1">
-        <h2 class="text-3xl font-bold leading-snug break-words">{{ selected.title }}</h2>
-        {% if selected.author %}<p class="text-muted">作者：{{ selected.author }}</p>{% endif %}
+      <div class="flex flex-col gap-1.5">
+        <p class="m-0 text-xs font-bold text-crimson-dark">いま選んでいる教材</p>
+        <h2 class="m-0 font-serif text-[30px] font-bold leading-snug break-words">{{ selected.title }}</h2>
+        {% if selected.author %}<p class="m-0 text-sm text-sepia-muted">作者：{{ selected.author }}</p>{% endif %}
       </div>
 
-      <div class="flex flex-col gap-2">
-        <h3 class="text-lg font-bold">概要</h3>
-        {# 教材セットに「概要」の項目はまだないため、いまは問いを出す。バックエンドで summary が追加されたら、そちらを優先して出す #}
-        {% if selected.summary %}
-          <p class="leading-relaxed">{{ selected.summary }}</p>
-        {% elif selected.question %}
-          <p class="leading-relaxed">{{ selected.question }}</p>
-        {% else %}
-          <p class="text-muted">概要は、まだありません。</p>
-        {% endif %}
-      </div>
+      {# 教材セットに「概要」の項目はまだないため、なければ問いを出す。どちらもなければ、この行ごと出さない #}
+      {% set summary = selected.summary or selected.question %}
+      {% if summary %}
+        <div class="flex flex-col gap-1.5">
+          <h3 class="m-0 text-[13px] font-bold">概要</h3>
+          <p class="m-0 text-[15px] leading-[1.8] break-words">{{ summary }}</p>
+        </div>
+      {% endif %}
 
-      <div class="flex flex-col gap-2">
-        <h3 class="flex items-center gap-2 text-lg font-bold">
-          選べるロール
-          {{ badge(selected.roles | length ~ "人") }}
-        </h3>
+      <div class="flex flex-col gap-2.5">
+        <div class="flex items-center gap-2.5">
+          <h3 class="m-0 text-sm font-bold">選べるロール</h3>
+          <span class="px-2.5 py-0.5 rounded-full bg-rose-soft text-xs font-bold text-crimson-dark">{{ selected.roles | length }}人</span>
+        </div>
         {% if selected.roles %}
-          <ul class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <ul class="m-0 p-0 list-none grid grid-cols-1 xs:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
             {% for role in selected.roles %}
-              <li class="flex items-center gap-3 min-h-14 px-3 py-2 border border-line rounded-lg bg-subtle">
-                {{ avatar(role.name[:1], role.image) }}
-                <span class="min-w-0 text-base font-bold leading-snug break-words">{{ role.name }}</span>
+              <li class="min-h-14 flex items-center gap-2.5 px-3.5 py-2 border border-cream-line rounded-[10px] bg-kinari">
+                {# 丸い印：ロール名の最初の1文字。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+                <span class="relative flex-none size-8 rounded-full overflow-hidden bg-crimson flex items-center justify-center font-serif text-sm font-bold text-[#FFF8E7]" aria-hidden="true">
+                  {{ role.name[:1] }}
+                  {% if role.image %}<img src="/static/{{ role.image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">{% endif %}
+                </span>
+                <span class="min-w-0 text-sm font-bold leading-normal break-words">{{ role.name }}</span>
               </li>
             {% endfor %}
           </ul>
         {% else %}
-          <p class="text-muted">ロールは、まだありません。</p>
+          <p class="m-0 text-sm text-sepia-muted">ロールは、まだありません。</p>
         {% endif %}
       </div>
     {% endif %}
   </section>
 </div>
 
-{# ボタンの行。左：トップに戻る、右：ロールを選ぶ。スマホ幅は縦に並べ、「ロールを選ぶ」を一番上にする #}
-<div class="mt-6 flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">
-  {{ btn_secondary("トップに戻る", href="/") }}
-  {% if selected is not none %}{{ btn_primary("ロールを選ぶ", href="/student/roles?set=" ~ (selected.id | urlencode)) }}{% endif %}
+{# ボタンの行。左：トップに戻る、右：ロールを選ぶ。768px未満は縦に並べ、「ロールを選ぶ」を一番上にする #}
+<div class="mt-[22px] flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">
+  <a href="/" class="inline-flex items-center justify-center min-h-[52px] px-6 border border-rose-line rounded-[10px] bg-cream-paper text-[15px] font-bold text-crimson-dark hover:bg-rose-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">トップに戻る</a>
+  {% if selected is not none %}
+    <a href="/student/roles?set={{ selected.id | urlencode }}" class="inline-flex items-center justify-center min-h-[52px] px-10 rounded-[10px] bg-crimson border-b-3 border-gold text-lg font-bold tracking-[0.1em] text-white hover:bg-crimson-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">ロールを選ぶ</a>
+  {% endif %}
 </div>
 {% endblock %}
