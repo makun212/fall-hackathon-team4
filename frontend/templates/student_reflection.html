@@ -1,6 +1,8 @@
-{# 生徒用：対話後の感想入力画面（Figma 15）。role / question / pre_opinion / reflection / error / reflection_max_length は main.py から渡す #}
+{# 生徒用：対話後の感想入力画面（振り返りQ2 縦の流れ）。role / question / pre_opinion / conversation_id / reflection / error / reflection_max_length は main.py から渡す #}
+{# 見た目の基準は docs/reference/reflect-Q2.html。CSSファイルは作らず、参照HTMLの CSS を Tailwind のクラスに置き換えている（student_question.html と同じ書き方） #}
+{# 配色は base.html の @theme の名前で書いている（深紅 crimson／濃い赤 crimson-dark／生成り kinari／背景 cream／紙の白 cream-paper／金 gold／文字 sepia／補助文字 sepia-muted／線 cream-line／補助ボタンの枠 rose-line） #}
+{# 「送信する」の見た目の切り替えは CSS だけ（form の group/form と、textarea の :placeholder-shown）。:has() 非対応のブラウザでは、常に薄い色のままになるだけで、送信は壊れない #}
 {% extends "base.html" %}
-{% from "_components.html" import btn_primary, btn_secondary %}
 
 {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
 {% set role_id = role["id"] %}
@@ -8,55 +10,105 @@
 
 {% block title %}対話のあとの考え | {% endblock %}
 
+{% block head %}
+{# 書体：本文は Noto Sans JP、題名・見出しは Noto Serif JP（デザインの基準どおり、この画面だけで読み込む） #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{% endblock %}
+
+{% block body_class %}bg-cream text-sepia{% endblock %}
+
+{# 上部バー：base.html のヘッダーと同じ中身（リンク先も同じ）で、背景を紙の白、下線を深紅にする（role_select.html・student_question.html と同じ） #}
+{% block header %}
+<header class="bg-cream-paper border-b-2 border-crimson text-sepia">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8">
+    <a href="/" class="inline-flex items-center min-h-14 font-['Noto_Serif_JP',serif] text-lg font-bold tracking-[0.08em] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">よみより</a>
+  </div>
+</header>
+{% endblock %}
+
 {% block content %}
-<div class="flex flex-col gap-6">
-  <div class="flex flex-col gap-1">
-    <h1 class="text-2xl md:text-3xl font-bold leading-snug">いろいろな立場と話して、考えは変わりましたか？</h1>
-    <p class="text-base text-muted">{{ question }}</p>
-    <p class="text-base text-muted">話した相手：<span class="font-bold text-ink">{{ role_name }}</span></p>
+{# 本文の幅は、基準HTMLの760px（左右の余白32pxずつを含む）から余白を引いた696px。main の左右の余白は32px。640px未満は、左右を12pxずつ広げて余白を20pxにする #}
+<div class="max-w-[696px] mx-auto max-sm:-mx-3 flex flex-col gap-6 pt-1.5 font-['Noto_Sans_JP',sans-serif] text-base leading-normal text-sepia">
+  <div>
+    <p class="m-0 text-[13px] font-bold tracking-[0.14em] text-crimson-dark">対話のあと</p>
+    <h1 class="mt-2.5 mb-0 font-['Noto_Serif_JP',serif] text-[28px] max-sm:text-[23px] font-bold leading-normal [word-break:auto-phrase] text-balance">いろいろな立場と話して、考えは変わりましたか？</h1>
   </div>
 
   {# フォームの送信先は、ここだけで定義する #}
-  <form id="reflection-form" action="/student/reflection" method="post" class="flex flex-col gap-6">
+  <form id="reflection-form" action="/student/reflection" method="post" class="group/form flex flex-col gap-6">
     <input type="hidden" name="role_id" value="{{ role_id }}">
     {% if conversation_id %}<input type="hidden" name="conversation_id" value="{{ conversation_id }}">{% endif %}
 
-    {# タブレット横画面（md以上）は「前の考え → 後の考え」の2列。スマホ幅は縦に並べ、矢印は下向きに回す #}
-    <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-4 md:gap-6 items-start">
-      {# 対話の前の考え（変更できない） #}
-      <section class="flex flex-col gap-2 min-w-0" aria-labelledby="pre-opinion-title">
-        <h2 id="pre-opinion-title" class="font-bold">対話の前の考え</h2>
-        <div class="px-4 py-3 bg-subtle border border-line rounded-lg whitespace-pre-wrap break-words">{{ pre_opinion }}</div>
+    {# 縦の流れ。左の金の縦線・丸印・菱形は飾り。640px未満は左の余白と丸印を小さくする #}
+    <div class="relative flex flex-col gap-[22px]">
+      <span class="absolute left-4 max-sm:left-3.5 top-5 bottom-5 w-0.5 bg-gold" aria-hidden="true"></span>
+
+      {# 対話の前の考え（表示だけ。変更できない） #}
+      <section class="relative flex flex-col gap-2 pl-[58px] max-sm:pl-12" aria-labelledby="pre-opinion-title">
+        <span class="absolute left-0 top-0.5 flex items-center justify-center size-[34px] max-sm:size-[30px] rounded-full bg-crimson border-3 border-cream shadow-[0_0_0_2px_var(--color-gold)] font-['Noto_Serif_JP',serif] text-[15px] max-sm:text-[13px] font-bold text-kinari" aria-hidden="true">前</span>
+        <h2 id="pre-opinion-title" class="m-0 pt-1.5 font-['Noto_Serif_JP',serif] text-[17px] font-bold">対話の前の考え</h2>
+        {# 前の考え・問いは自動エスケープのまま出す（|safe は使わない）。改行はそのまま改行として見せる #}
+        <div class="px-[18px] py-3.5 bg-kinari border border-gold rounded-[10px]">
+          <p class="m-0 font-['Noto_Serif_JP',serif] text-[17px] leading-[1.8] whitespace-pre-line [overflow-wrap:anywhere]">{{ pre_opinion }}</p>
+        </div>
+        <p class="m-0 text-xs text-sepia-muted [overflow-wrap:anywhere]">問い：{{ question }}</p>
       </section>
 
-      <div class="flex justify-center md:pt-12 text-2xl text-muted" aria-hidden="true">
-        <span class="inline-block rotate-90 md:rotate-0">→</span>
+      {# 対話した相手 #}
+      <div class="relative pl-[58px] max-sm:pl-12">
+        <span class="absolute left-2.5 max-sm:left-2 top-1/2 -mt-[7px] size-3.5 rotate-45 rounded-[3px] bg-cream-paper border-2 border-crimson" aria-hidden="true"></span>
+        <div class="flex flex-col gap-1 px-[18px] py-3 bg-cream-paper border border-cream-line rounded-xl">
+          <span class="text-xs font-bold tracking-[0.08em] text-crimson-dark">AIと対話しました</span>
+          <span class="text-sm text-sepia-muted [overflow-wrap:anywhere]">話した相手：<b class="font-['Noto_Serif_JP',serif] text-sepia">{{ role_name }}</b></span>
+        </div>
       </div>
 
-      {# 対話のあとの考え（感想） #}
-      <section class="flex flex-col gap-2 min-w-0">
-        <h2 class="font-bold"><label for="reflection">対話のあとの考え</label></h2>
+      {# 対話のあとの考え（感想）。入力できるのはこの欄だけ #}
+      <section class="relative flex flex-col gap-2 pl-[58px] max-sm:pl-12">
+        <span class="absolute left-0 top-0.5 flex items-center justify-center size-[34px] max-sm:size-[30px] rounded-full bg-crimson border-3 border-cream shadow-[0_0_0_2px_var(--color-gold)] font-['Noto_Serif_JP',serif] text-[15px] max-sm:text-[13px] font-bold text-kinari" aria-hidden="true">後</span>
+        <label for="reflection" class="pt-1.5 font-['Noto_Serif_JP',serif] text-[17px] font-bold">対話のあとの考え</label>
 
         {% if error %}
-          <div role="alert" class="flex items-start gap-3 px-4 py-2 bg-accent-soft border border-accent rounded-lg text-ink">
-            <span class="shrink-0 inline-flex items-center justify-center size-6 mt-0.5 rounded-full bg-accent text-paper text-base font-bold" aria-hidden="true">！</span>
-            <p>{{ error }}</p>
+          <div role="alert" class="flex items-start gap-3 px-4 py-2 bg-rose-soft border border-crimson rounded-[10px] text-sepia">
+            <span class="shrink-0 inline-flex items-center justify-center size-6 mt-0.5 rounded-full bg-crimson text-cream-paper text-base font-bold" aria-hidden="true">！</span>
+            <p class="m-0">{{ error }}</p>
           </div>
         {% endif %}
 
-        <textarea id="reflection" name="reflection" rows="6" required maxlength="{{ reflection_max_length }}"
-                  placeholder="例：対話をして、〜について、考えが変わった（変わらなかった）。なぜなら、〜だからだ。"
-                  aria-describedby="reflection-count reflection-note"
-                  class="w-full min-h-12 px-4 py-3 bg-paper border border-line rounded-lg text-lg resize-y focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{{ reflection }}</textarea>
-        <p id="reflection-count" class="self-end text-base text-muted tabular-nums"><span id="reflection-count-now">0</span> / {{ reflection_max_length }}文字</p>
+        {# 文字数は枠の中の右下に重ねる。罫線（ノートの線）は背景の繰り返しで描き、文字の行の高さ36pxにそろえる #}
+        {# 罫線をやめるときは、class の bg-[repeating-linear-gradient(…)] の1つを bg-none に置き換える #}
+        {# placeholder は消さない（「送信する」の見た目の切り替えに :placeholder-shown を使っているため） #}
+        <div class="relative">
+          <textarea id="reflection" name="reflection" rows="5" required maxlength="{{ reflection_max_length }}"
+                    placeholder="例：対話をして、〜について、考えが変わった（変わらなかった）。なぜなら、〜だからだ。"
+                    aria-describedby="reflection-count reflection-note"
+                    class="block w-full min-h-[190px] resize-y px-[18px] pt-2.5 pb-11 text-base leading-9 text-sepia bg-cream-paper bg-local bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_35px,var(--color-cream-line)_35px,var(--color-cream-line)_36px)] border border-cream-line rounded-[10px] placeholder:text-sepia-muted/85 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:border-crimson">{{ reflection }}</textarea>
+          <p id="reflection-count" class="absolute right-[18px] bottom-3 m-0 text-[13px] text-sepia-muted tabular-nums pointer-events-none"><span id="reflection-count-now">0</span> / {{ reflection_max_length }}文字</p>
+        </div>
       </section>
     </div>
 
-    <p id="reflection-note" class="text-base text-muted">送信すると、先生に届きます。送信したあとは、書き直せません。</p>
+    <div class="flex flex-col gap-3.5">
+      {# 注意文。確認ダイアログなどは出さない（今の挙動のまま） #}
+      <p id="reflection-note" class="m-0 flex items-center gap-2.5 text-[13px] leading-[1.7] text-sepia-muted">
+        <svg class="flex-none" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="var(--color-crimson-dark)"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="var(--color-crimson-dark)" stroke-width="1.6"/></svg>
+        送信すると、先生に届きます。送信したあとは、書き直せません。
+      </p>
 
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      {{ btn_secondary("もう一度対話", href="/student/chat?role_id=" ~ role_id|urlencode ~ ("&conversation_id=" ~ conversation_id|urlencode if conversation_id else "")) }}
-      {{ btn_primary("送信する", busy_label="送信中…") }}
+      {# ボタンの行。左：もう一度対話、右：送信する。640px未満は縦に並べ、「送信する」を上にする #}
+      <div class="flex flex-wrap items-center justify-between gap-3.5 max-sm:flex-col-reverse max-sm:items-stretch">
+        <a href="/student/chat?role_id={{ role_id | urlencode }}{% if conversation_id %}&conversation_id={{ conversation_id | urlencode }}{% endif %}" class="flex min-h-[52px] items-center justify-center rounded-[10px] border border-rose-line bg-cream-paper px-[26px] text-[15px] font-bold text-crimson-dark focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">もう一度対話</a>
+        <div class="flex flex-wrap items-center justify-end gap-3.5 max-sm:flex-col-reverse max-sm:items-stretch">
+          {# 1文字でも書いたらヒントを消す #}
+          <span id="reflection-cta-hint" class="text-[13px] text-sepia-muted max-sm:text-center group-has-[textarea:not(:placeholder-shown)]/form:hidden">考えを書くと、送信できます。</span>
+          {# 未入力でも disabled にはしない。何も書かずに押すと、textarea の required でブラウザが止める #}
+          {# 書く前は薄い色、書いたら深紅の主ボタンの見た目にする #}
+          {# 送信中だけ disabled にして「送信中…」を出す（二重送信の防止。下の script。今までと同じ挙動） #}
+          <button type="submit" aria-describedby="reflection-cta-hint" class="group min-h-[52px] cursor-pointer rounded-[10px] border-0 border-b-3 border-rose-line bg-cream-line px-10 text-[17px] font-bold tracking-[0.08em] text-sepia-muted focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink group-has-[textarea:not(:placeholder-shown)]/form:border-gold group-has-[textarea:not(:placeholder-shown)]/form:bg-crimson group-has-[textarea:not(:placeholder-shown)]/form:text-cream-paper disabled:opacity-60 disabled:cursor-not-allowed"><span class="group-disabled:hidden">送信する</span><span class="hidden group-disabled:inline">送信中…</span></button>
+        </div>
+      </div>
     </div>
   </form>
 </div>
@@ -68,17 +120,18 @@
     const count = document.getElementById("reflection-count-now");
     const submit = form.querySelector("button");
 
-    // 文字数の表示。上限は textarea の maxlength から読む（90%以上で赤）
+    // 文字数の表示。上限は textarea の maxlength から読む（90%以上で濃い赤・太字）
     const update = () => {
       const near = input.value.length >= input.maxLength * 0.9;
-      count.parentElement.classList.toggle("text-accent", near);
-      count.parentElement.classList.toggle("text-muted", !near);
+      count.parentElement.classList.toggle("text-crimson-dark", near);
+      count.parentElement.classList.toggle("font-bold", near);
+      count.parentElement.classList.toggle("text-sepia-muted", !near);
       count.textContent = input.value.length;
     };
     input.addEventListener("input", update);
     update();
 
-    // 二重送信の防止。押せなくすると、ボタンの文字が「送信中…」になる（_components.html の busy_label）
+    // 二重送信の防止。押せなくすると、ボタンの文字が「送信中…」になる
     form.addEventListener("submit", () => { submit.disabled = true; });
     // ブラウザの「戻る」で、押せないままの画面が出たときは元に戻す
     window.addEventListener("pageshow", () => { submit.disabled = false; });
