@@ -1,24 +1,47 @@
 {# 教師用・生徒用で共用のログイン画面。heading / login_url / home_url は main.py から渡す #}
+{# 見た目の基準は「生徒用ログイン L2（一枚札）」。教師用も同じ見た目で、見出しだけ heading で切り替わる #}
+{# 配色は base.html の @theme の名前で書いている（深紅 crimson／濃い赤 crimson-dark／背景 cream／紙の白 cream-paper／線 cream-line／文字 sepia／補助文字 sepia-muted／補助ボタンの枠 rose-line／フォーカス ink） #}
 {% extends "base.html" %}
-{% from "_components.html" import page_header, btn_primary, btn_secondary %}
 
 {% block title %}{{ heading }} | {% endblock %}
 
-{% block content %}
-{# 横に広い画面では、ログインの欄を真ん中に寄せる #}
-<div class="max-w-md mx-auto md:mt-8 flex flex-col gap-6">
-  <div class="-mb-6">{{ page_header(heading) }}</div>
-  <p>Googleアカウントでログインしてください。</p>
+{% block head %}
+{# 書体：本文は Noto Sans JP、題名・見出しは Noto Serif JP（ロール選択の画面と同じく、この画面だけで読み込む） #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{% endblock %}
 
-  {# 本番の実装時に、Googleの公式のボタンに差し替える #}
-  {{ btn_primary("Googleアカウントでログイン", href=login_url) }}
+{# ログインの札を、ヘッダーより下の残りの高さの中で上下中央に置くため、body を縦並びの flex にする #}
+{% block body_class %}bg-cream text-sepia flex flex-col{% endblock %}
 
-  {# ログインの実装が完了したら、このリンクを削除する #}
-  <a href="{{ home_url }}" class="inline-flex items-center justify-center min-h-12 text-base text-muted underline hover:text-ink">（開発用）ログインせずに進む</a>
+{# base.html のヘッダーと main の余白は使わず、この画面だけ body ごと差し替える（base.html は変更しない） #}
+{% block body %}
+{# 上部バー：base.html のヘッダーと同じ中身（リンク先も同じ）で、背景を紙の白、下線を深紅、明朝にする #}
+<header class="flex items-center min-h-14 px-8 max-sm:px-5 bg-cream-paper border-b-2 border-crimson">
+  <a href="/" class="inline-flex items-center min-h-12 font-['Noto_Serif_JP',serif] text-lg font-bold tracking-[0.08em] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">{{ app_name }}</a>
+</header>
 
-  <div class="flex flex-col gap-2 pt-6 border-t border-line">
-    <p class="text-base text-muted">先生・生徒を選び直す場合は戻ってください</p>
-    <div>{{ btn_secondary("戻る", href="/") }}</div>
+<main class="flex-1 flex flex-col justify-center w-full max-w-[520px] mx-auto px-8 py-10 max-sm:px-4 max-sm:py-7font-['Noto_Sans_JP',sans-serif] text-base leading-normal">
+  {# 一枚札。栞や飾りは付けない #}
+  <div class="flex flex-col gap-[22px] px-8 pt-9 pb-7 max-sm:px-5 max-sm:pt-7 max-sm:pb-[22px] bg-cream-paper border border-cream-line rounded-[14px] shadow-[0_10px_18px_rgba(90,58,30,0.14)]">
+    <h1 class="m-0 self-start pb-1.5 border-b-3 border-crimson font-['Noto_Serif_JP',serif] text-[28px] max-sm:text-2xl font-bold leading-snug">{{ heading }}</h1>
+    <p class="m-0 text-[15px] leading-[1.8]">Googleアカウントでログインしてください。</p>
+
+    {# 本番の実装時に、Googleの公式のボタンに差し替える #}
+    {# ロゴは装飾なので aria-hidden。ボタンの名前は文字で決まる #}
+    <a href="{{ login_url }}" class="flex items-center justify-center gap-3 min-h-14 px-5 bg-cream-paper border-2 border-crimson rounded-[10px] text-[17px] font-bold tracking-[0.04em] text-crimson-dark transition-transform duration-150 ease-in-out hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">
+      <svg class="flex-none" aria-hidden="true" width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Googleアカウントでログイン
+    </a>
+
+    {# ログインの実装が完了したら、このリンクを削除する。文字は小さいが、押せる高さは44px確保する #}
+    <a href="{{ home_url }}" class="self-center inline-flex items-center min-h-11 px-1 text-[13px] text-sepia-muted underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">（開発用）ログインせずに進む</a>
+
+    <div class="flex flex-col items-start gap-2.5 pt-[18px] border-t border-cream-line">
+      <p class="m-0 text-[13px] leading-[1.7] text-sepia-muted">先生・生徒を選び直す場合は戻ってください</p>
+      <a href="/" class="flex items-center min-h-12 px-7 max-sm:w-full max-sm:justify-center bg-cream-paper border border-rose-line rounded-[10px] text-[15px] font-bold text-crimson-dark focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">戻る</a>
+    </div>
   </div>
-</div>
+</main>
 {% endblock %}
