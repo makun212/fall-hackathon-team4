@@ -1,48 +1,109 @@
-{# 生徒がチャットの相手にするロールを選ぶ画面。roles は main.py の get_roles() から渡す #}
-{# タブレットの横画面（1180×820）で、スクロールせずにボタンまで見えるようにしている #}
-{# ロールが5件でも6件でも同じ見た目になるよう、ボタンはカードの一覧の外（下の行）に置く。3列×2段（6件）までが1画面に収まる #}
-{# 820 の高さに合わせて、カードの中の行の間・項目の間・余白を広めにしている。base.html・見出し・カードの中身を変えたら、高さを見直す #}
+{# 生徒がチャットの相手にするロールを選ぶ画面（R1 栞カード）。roles は main.py の student_roles() から渡す #}
+{# 見た目の基準は docs/reference/role-R1.html。CSSファイルは作らず、参照HTMLの CSS を Tailwind のクラスに置き換えている #}
+{# 選択状態は JavaScript を使わず、クラスだけで切り替える #}
+{#   - カード本体：<input class="peer"> のすぐ後ろの兄弟要素なので peer-checked: を使う（input と role-card の順番を変えない） #}
+{#   - カードの中の部品（栞・「選択中」の札）：label に group/item を付け、group-has-checked/item: を使う #}
+{#   - 下のボタンとヒント：form に group/form を付け、group-has-checked/form: を使う #}
+{# 配色は base.html の @theme の名前で書いている（深紅 crimson／濃い赤 crimson-dark／生成り kinari／背景 cream／紙の白 cream-paper／金 gold／文字 sepia／補助文字 sepia-muted／線 cream-line） #}
 {% extends "base.html" %}
-{% from "_components.html" import page_header, btn_primary, btn_secondary, radio_card, avatar %}
 
 {% block title %}ロールを選ぶ | {% endblock %}
 
+{% block head %}
+{# 書体：本文は Noto Sans JP、題名・見出しは Noto Serif JP（デザインの基準どおり、この画面だけで読み込む） #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{% endblock %}
+
+{% block body_class %}bg-cream text-sepia{% endblock %}
+
+{# 上部バー：base.html のヘッダーと同じ中身（リンク先も同じ）で、背景を紙の白、下線を深紅にする #}
+{% block header %}
+<header class="bg-cream-paper border-b-2 border-crimson text-sepia">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8">
+    <a href="/" class="inline-flex items-center min-h-14 font-['Noto_Serif_JP',serif] text-lg font-bold tracking-[0.08em] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">よみより</a>
+  </div>
+</header>
+{% endblock %}
+
 {% block content %}
-{{ page_header("ロールを選んでください") }}
-<p class="-mt-4 mb-5 text-muted">話し相手にする立場を1つ選んでください</p>
-
-<form action="/student/question" method="get" class="flex flex-col gap-6">
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-    {% for role in roles %}
-      {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
-      {# summary は画面の高さに入りきらないため、この画面では表示しない（特徴で立場の違いを伝える） #}
-      {% set role_id = role["id"] %}
-      {% set role_name = role["name"] %}
-      {% set role_features = role["features"] %}
-      {% set role_image = role["image"] %}
-
-      {% call radio_card("role_id", role_id, required=True) %}
-        {# radio_card の余白（px-4 py-3）に、上下の余白を少し足す #}
-        <div class="flex flex-col gap-3 py-1">
-          <div class="flex items-center gap-3">
-            {{ avatar(role_name[:1], role_image) }}
-            <h2 class="pr-6 text-xl font-bold leading-snug">{{ role_name }}</h2>
-          </div>
-          {# 特徴は、行の間と項目の間を広めにして読みやすくする #}
-          <ul class="flex flex-col gap-1 list-disc pl-5 text-base leading-relaxed">
-            {% for feature in role_features %}
-              <li>{{ feature }}</li>
-            {% endfor %}
-          </ul>
-        </div>
-      {% endcall %}
-    {% endfor %}
+{# main の左右の余白は32px。640px未満は、左右を12pxずつ広げて余白を20pxにする #}
+<div class="max-sm:-mx-3 font-['Noto_Sans_JP',sans-serif] text-base leading-normal text-sepia">
+  <div class="flex flex-col items-start gap-3">
+    <div>
+      <h1 class="m-0 font-['Noto_Serif_JP',serif] text-[26px] font-bold leading-snug">ロールを選んでください</h1>
+      <p class="mt-1 mb-0 text-[13px] text-sepia-muted">話し相手にする立場を1つ選んでください</p>
+    </div>
+    {# 「読んでいる教材」のチップは、教材名・作者がテンプレートに渡されていないため表示しない #}
   </div>
 
-  {# ボタンの行。タブレット横画面は、左：戻る、右：このロールで対話を始める。スマホ幅は縦に並べ、「このロールで対話を始める」を一番上にする #}
-  <div class="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">
-    {{ btn_secondary("戻る", href="/student") }}
-    {{ btn_primary("このロールで対話を始める") }}
-  </div>
-</form>
+  <form action="/student/question" method="get" class="group/form">
+    <fieldset class="m-0 min-w-0 border-0 p-0 pt-[26px]">
+      <legend class="sr-only">話し相手にする立場</legend>
+      {# 幅260px以上で、自動で1〜3列に並ぶ（ロールが4件以上なら折り返す） #}
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5 pt-3.5">
+        {% for role in roles %}
+          {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
+          {# summary は画面の高さに入りきらないため、この画面では表示しない（見方で立場の違いを伝える） #}
+          {% set role_id = role["id"] %}
+          {% set role_name = role["name"] %}
+          {% set role_features = role["features"] %}
+          {% set role_image = role["image"] %}
+
+          <label class="group/item relative block cursor-pointer">
+            {# 見た目だけを隠す（display:none にしない。キーボードで選べるようにするため）。name と value はフォームの送信内容なので変えない #}
+            <input class="peer absolute m-0 size-px opacity-0" type="radio" name="role_id" value="{{ role_id }}" required>
+            {# role-card は input のすぐ後ろに置く（peer-checked: が効くのは、後ろの兄弟要素だけ） #}
+            <div class="relative flex h-full flex-col gap-3.5 rounded-xl border border-cream-line bg-cream-paper px-5 pt-[22px] pb-[18px] transition-[translate,box-shadow,background-color] duration-200 ease-in-out motion-reduce:transition-none peer-not-checked:hover:-translate-y-1 peer-checked:-translate-y-2.5 peer-checked:border-gold peer-checked:bg-kinari peer-checked:shadow-[0_0_0_2px_var(--color-gold),0_10px_16px_color-mix(in_srgb,var(--color-wood-dark)_22%,transparent)] peer-focus-visible:outline-3 peer-focus-visible:outline-offset-3 peer-focus-visible:outline-ink">
+              {# 栞（選択中だけ表示） #}
+              <svg class="absolute -top-2 right-[18px] hidden drop-shadow-[0_2px_2px_rgb(0_0_0/0.25)] group-has-checked/item:block" aria-hidden="true" width="30" height="46" viewBox="0 0 30 46"><path d="M0 0H30V46L15 37L0 46Z" fill="var(--color-crimson)"/></svg>
+
+              <div class="flex items-center gap-3 pr-7">
+                {# 頭文字の丸。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+                <span class="relative flex size-[38px] flex-none items-center justify-center overflow-hidden rounded-full bg-crimson font-['Noto_Serif_JP',serif] text-base font-bold text-kinari" aria-hidden="true">
+                  {{ role_name[:1] }}
+                  {% if role_image %}
+                    <img src="/static/{{ role_image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">
+                  {% endif %}
+                </span>
+                <span class="font-['Noto_Serif_JP',serif] text-[17px] leading-normal font-bold [word-break:auto-phrase] text-balance">{{ role_name }}</span>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <span class="text-xs font-bold tracking-[0.08em] text-crimson-dark">この立場の見方</span>
+                <ul class="m-0 flex list-none flex-col gap-2 p-0">
+                  {% for feature in role_features %}
+                    <li class="flex gap-2.5 text-sm leading-[1.7] before:mt-[9px] before:size-1.5 before:flex-none before:rounded-[1px] before:bg-crimson before:content-['']"><span>{{ feature }}</span></li>
+                  {% endfor %}
+                </ul>
+              </div>
+
+              {# 状態の印。2つの文言を両方置き、選択中かどうかで切り替える #}
+              <div class="mt-auto pt-1.5">
+                <span class="inline-flex min-h-9 items-center gap-2 rounded-full border-[1.5px] border-crimson px-4 text-sm font-bold text-crimson-dark group-has-checked/item:bg-crimson group-has-checked/item:text-kinari">
+                  <span class="size-3.5 flex-none rounded-full border-2 border-current group-has-checked/item:border-kinari group-has-checked/item:bg-kinari" aria-hidden="true"></span>
+                  <span class="group-has-checked/item:hidden">この立場にする</span>
+                  <span class="hidden group-has-checked/item:inline">選択中</span>
+                </span>
+              </div>
+            </div>
+          </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    {# ボタンの行。左：戻る、右：このロールで対話を始める。640px未満は縦に並べ、「このロールで対話を始める」を上にする #}
+    <div class="flex flex-wrap items-center justify-between gap-3.5 pt-7 max-sm:flex-col-reverse max-sm:items-stretch">
+      <a href="/student" class="flex min-h-[52px] items-center justify-center rounded-[10px] border border-rose-line bg-cream-paper px-7 text-[15px] font-bold text-crimson-dark focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">戻る</a>
+      <div class="flex flex-wrap items-center justify-end gap-3.5 max-sm:flex-col-reverse max-sm:items-stretch">
+        {# ロールを選ぶとヒントを消す #}
+        <span id="role-cta-hint" class="text-[13px] text-sepia-muted max-sm:text-center group-has-checked/form:hidden">ロールを1つ選ぶと、押せるようになります。</span>
+        {# disabled は付けない（JavaScript なしでは外せないため）。何も選ばずに押すと、ラジオの required でブラウザが止める #}
+        {# 選ぶ前は薄い色、選んだら深紅の主ボタンの見た目にする #}
+        <button type="submit" aria-describedby="role-cta-hint" class="min-h-[52px] cursor-pointer rounded-[10px] border-0 border-b-3 border-rose-line bg-cream-line px-9 text-[17px] font-bold tracking-[0.06em] text-sepia-muted focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink group-has-checked/form:border-gold group-has-checked/form:bg-crimson group-has-checked/form:text-cream-paper">このロールで対話を始める</button>
+      </div>
+    </div>
+  </form>
+</div>
 {% endblock %}
