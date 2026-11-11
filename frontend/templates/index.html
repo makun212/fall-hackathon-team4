@@ -93,7 +93,7 @@
       <p id="chat-error-text" class="m-0 leading-[1.7]"></p>
     </div>
 
-    {# 失敗したときは入力を消さない（成功したときだけ reset する） #}
+    {# 送信した時点で入力を消す。失敗したときは、送ろうとした文章を入力欄に戻す（下の script） #}
     {# hx-disabled-elt="find button" は、フォームの中の最初の button（送信）を指す。フォームの中に別の button を先に置かないこと #}
     <form id="chat-form" hx-post="/chat" hx-target="#chat" hx-swap="beforeend scroll:#chat-scroll:bottom"
           hx-indicator="#typing" hx-disabled-elt="find button"
@@ -219,10 +219,18 @@
     form.addEventListener("htmx:sendError", () => showError(MESSAGES.network));
     form.addEventListener("htmx:timeout", () => showError(MESSAGES.timeout));
 
-    // 成功したときだけ入力を消す。どちらの場合も入力欄に戻る
+    // 送信した時点で入力を消す（送る文章は htmx がこの前に集め終わっている）
+    // 失敗したときは、送ろうとした文章を入力欄に戻す（考え中に新しく書いていたら、そちらを残す）
+    let sentText = "";
+    form.addEventListener("htmx:beforeRequest", () => {
+      sentText = input.value;
+      input.value = "";
+      updateCount();
+    });
+    // どちらの場合も入力欄に戻る
     form.addEventListener("htmx:afterRequest", (e) => {
-      if (e.detail.successful) {
-        form.reset();
+      if (!e.detail.successful && !input.value) {
+        input.value = sentText;
         updateCount();
       }
       setTimeout(() => input.focus());
