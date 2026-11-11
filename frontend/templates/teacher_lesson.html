@@ -1,6 +1,75 @@
-{# 教師用：授業の画面（仮）。中身はまだない（上部の「よみより」と赤線だけを表示する） #}
+{# 教師用：授業の画面（#43、#49）。material_set / status / submissions は main.py の teacher_lesson() から渡す #}
+{# status は not_started（まだ）/ open（授業中）/ ended（終了した）。submissions は生徒ごとの対話と感想の提出状況 #}
+{# バックエンド担当が、動く最低限の見た目で作った。見た目は Figma に合わせて直してよい（変数名と form の送信先は変えない） #}
 {% extends "teacher_base.html" %}
+{% from "_components.html" import page_header, btn_primary, btn_secondary, badge %}
 
 {% block title %}授業 | {% endblock %}
 
-{% block content %}{% endblock %}
+{% block content %}
+{% set lesson_url = "/teacher/material-sets/" ~ (material_set.id | urlencode) ~ "/lesson" %}
+<div class="flex flex-col gap-6">
+  {{ page_header(material_set.title ~ " の授業") }}
+
+  <section class="flex flex-col gap-2 p-5 bg-paper border border-line rounded-lg">
+    <p class="m-0 text-base text-muted">{{ material_set.author }}　{{ material_set.range_label }}</p>
+    {% if material_set.question %}<p class="m-0">問い：{{ material_set.question }}</p>{% endif %}
+    <p class="m-0 text-base">ロール：{% for role in material_set.roles %}{{ role.name }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
+  </section>
+
+  {# 授業の状態と、開始・終了のボタン #}
+  <section class="flex flex-wrap items-center gap-4">
+    {% if status == "open" %}
+      {{ badge("授業中", "accent") }}
+      <p class="m-0">生徒のトップに、この教材セットが表示されています。</p>
+      <form action="{{ lesson_url }}/end" method="post" class="ml-auto"
+            onsubmit="return confirm('授業を終了すると、生徒は新しい対話を始められなくなります。終了しますか？')">
+        {{ btn_primary("生徒の感想を保存して授業終了") }}
+      </form>
+    {% elif status == "ended" %}
+      {{ badge("終了しました") }}
+      <p class="m-0">生徒は、この教材セットで新しい対話を始められません。</p>
+      <form action="{{ lesson_url }}/start" method="post" class="ml-auto">
+        {{ btn_primary("もう一度授業を開始する") }}
+      </form>
+    {% else %}
+      {{ badge("まだ開始していません") }}
+      <p class="m-0">開始すると、生徒のトップにこの教材セットが表示されます。</p>
+      <form action="{{ lesson_url }}/start" method="post" class="ml-auto">
+        {{ btn_primary("授業を開始する") }}
+      </form>
+    {% endif %}
+  </section>
+
+  {# 生徒ごとの提出状況 #}
+  <section class="flex flex-col gap-3">
+    <h2 class="text-xl font-bold">
+      感想の提出状況
+      <span class="text-base font-normal text-muted">（提出 {{ submissions | selectattr("reflection") | list | length }} / {{ submissions | length }} 人）</span>
+    </h2>
+    {% if submissions %}
+      <ul class="flex flex-col gap-3">
+        {% for s in submissions %}
+          <li class="flex flex-col gap-2 p-4 bg-paper border border-line rounded-lg">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="font-bold">{{ s.student_name }}</span>
+              <span class="text-base text-muted">ロール：{{ s.role_name }}　発言 {{ s.message_count }} 回</span>
+              {% if s.reflection %}{{ badge("提出済み", "accent") }}{% else %}{{ badge("未提出") }}{% endif %}
+            </div>
+            {% if s.pre_opinion %}
+              <p class="m-0 text-base whitespace-pre-wrap break-words"><span class="text-muted">対話前：</span>{{ s.pre_opinion }}</p>
+            {% endif %}
+            {% if s.reflection %}
+              <p class="m-0 text-base whitespace-pre-wrap break-words"><span class="text-muted">対話後：</span>{{ s.reflection }}</p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-muted">まだ、この教材セットで対話した生徒はいません。</p>
+    {% endif %}
+  </section>
+
+  <div>{{ btn_secondary("作成した教材セットに戻る", href="/teacher/material-sets") }}</div>
+</div>
+{% endblock %}

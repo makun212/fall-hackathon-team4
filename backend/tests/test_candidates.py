@@ -124,6 +124,7 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual("編集した立場", db.read_material_sets()[0]["roles"][0]["name"])
 
         # 生徒が、その教材セットのロールで話す。根拠と口調は、AI が作った元のロールから取る
+        db.start_lesson(material_set_id)
         self.app.get(f"/student/roles?set={material_set_id}")
         response = self.app.post("/student/question", data={"role_id": first, "opinion": "考え"}, follow_redirects=False)
         conversation_id = re.search(r"conversation_id=([0-9a-f]{32})", response.headers["location"]).group(1)

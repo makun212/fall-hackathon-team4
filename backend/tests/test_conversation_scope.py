@@ -52,6 +52,8 @@ class ConversationScopeTests(unittest.TestCase):
         self.conversation_id = "b" * 32
 
     def choose(self, material_set_id="ms001"):
+        # 生徒が教材セットを選べるのは、授業が開始中のときだけ（#43）
+        db.start_lesson(material_set_id)
         self.assertEqual(200, self.app.get(f"/student/roles?set={material_set_id}").status_code)
 
     def start(self):

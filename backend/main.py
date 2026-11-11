@@ -1180,9 +1180,37 @@ def teacher_material_set_edit(request: Request, material_set_id: str):
 # TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
 @app.get("/teacher/material-sets/{material_set_id}/lesson", response_class=HTMLResponse)
 def teacher_lesson(request: Request, material_set_id: str):
+    material_set = next((s for s in get_confirmed_material_sets() if s["id"] == material_set_id), None)
+    if material_set is None:
+        raise HTTPException(status_code=404, detail="教材セットが見つかりません")
+    lesson = db.get_last_lesson(material_set_id)
+    return templates.TemplateResponse(
+        request,
+        "teacher_lesson.html",
+        {
+            "material_set": material_set,
+            # not_started（まだ）/ open（授業中）/ ended（終了した）
+            "status": "not_started" if lesson is None else ("open" if lesson["ended_at"] is None else "ended"),
+            "submissions": get_lesson_submissions(material_set_id),
+        },
+    )
+
+
+# 教師用：授業の開始・終了（#43）。終わったら授業の画面に戻る
+@app.post("/teacher/material-sets/{material_set_id}/lesson/start")
+def teacher_lesson_start(request: Request, material_set_id: str):
     if material_set_id not in {s["id"] for s in get_confirmed_material_sets()}:
         raise HTTPException(status_code=404, detail="教材セットが見つかりません")
-    return templates.TemplateResponse(request, "teacher_lesson.html")
+    db.start_lesson(material_set_id, current_student_id(request))
+    return RedirectResponse(f"/teacher/material-sets/{material_set_id}/lesson", status_code=303)
+
+
+@app.post("/teacher/material-sets/{material_set_id}/lesson/end")
+def teacher_lesson_end(request: Request, material_set_id: str):
+    if material_set_id not in {s["id"] for s in get_confirmed_material_sets()}:
+        raise HTTPException(status_code=404, detail="教材セットが見つかりません")
+    db.end_lesson(material_set_id)
+    return RedirectResponse(f"/teacher/material-sets/{material_set_id}/lesson", status_code=303)
 
 
 # 教師用：生徒のチャット一覧。only_detected=1 なら、検知がある会話だけにする
@@ -1224,7 +1252,7 @@ def teacher_chat_detail(request: Request, conversation_id: str):
 @app.get("/student", response_class=HTMLResponse)
 def student_home(request: Request):
     return templates.TemplateResponse(
-        request, "student_home.html", {"material_sets": get_confirmed_material_sets()}
+        request, "student_home.html", {"material_sets": get_lesson_material_sets()}
     )
 
 
@@ -1234,7 +1262,8 @@ def student_roles(request: Request, material_set_id: str = Query("", alias="set"
     # ?set= で教材セットを選んだときは、その教材セットを Cookie に覚えて、ロールを出す（#44）
     if material_set_id:
         material_set = get_material_set_for_chat(material_set_id)
-        if material_set is None:
+        if material_set is None or not lesson_is_open(material_set_id):
+            # 授業が開始中でない教材セットは選べない（#43）
             return RedirectResponse("/student", status_code=303)
         response = templates.TemplateResponse(request, "role_select.html", {"roles": material_set["roles"]})
         response.set_cookie(MATERIAL_SET_COOKIE, material_set_id, httponly=True, samesite="lax")
@@ -1276,6 +1305,10 @@ def student_question_submit(
         # 入力した文章は消さずに、入力欄に戻す
         return render_student_question(request, role, opinion=opinion, error=error, status_code=422)
 
+    if not can_start_conversation(request, material_set):
+        # 授業が終わった教材セットでは、新しい対話を始められない（#43）
+        return RedirectResponse("/student", status_code=303)
+
     # 対話前の考えを保存して、会話を始める（#46）
     conversation_id = chat_service.new_conversation_id()
     db.create_conversation(
@@ -1308,6 +1341,9 @@ def student_chat(request: Request, role_id: str | None = None, conversation_id: 
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
     # 問いかけ画面から来たときは、その会話を続ける。なければ新しい会話にする
+    if conversation is None and not can_start_conversation(request, material_set):
+        # 授業が終わった教材セットでは、新しい対話を始められない（#43）
+        return RedirectResponse("/student", status_code=303)
     conversation_id = conversation["id"] if conversation else chat_service.new_conversation_id()
     if conversation is None:
         # 問いかけ画面を通らずに開く場合も、IDを発行した時点の教材を固定する。
@@ -1368,6 +1404,44 @@ def student_reflection_submit(
 @app.get("/student/finish", response_class=HTMLResponse)
 def student_finish(request: Request):
     return templates.TemplateResponse(request, "student_finish.html")
+
+
+# ---- 授業（#43） ----
+
+
+def lesson_is_open(material_set_id) -> bool:
+    return bool(material_set_id) and db.get_open_lesson(material_set_id) is not None
+
+
+def can_start_conversation(request: Request, material_set) -> bool:
+    # 新しい会話を始めてよいか。教材セットを選んでいれば、その授業が開始中のときだけ
+    # 教材セットを選ばない全文モード（/student/roles を直接開いたとき）は、授業と関係なく使える
+    if material_set is None:
+        return True
+    return lesson_is_open(request.cookies.get(MATERIAL_SET_COOKIE))
+
+
+def get_lesson_material_sets():
+    # 生徒のトップに出す教材セット（授業が開始中のものだけ）
+    open_ids = db.open_lesson_set_ids()
+    return [s for s in get_confirmed_material_sets() if s["id"] in open_ids]
+
+
+def get_lesson_submissions(material_set_id: str):
+    # 授業の画面に出す、生徒ごとの対話と感想の提出状況
+    record = next((r for r in read_material_set_records() if r["id"] == material_set_id), None)
+    role_names = {r["role_id"]: r["name"] for r in (record["roles"] if record else [])}
+    user_names = db.read_user_names()
+    return [
+        {
+            "student_name": user_names.get(c["student_id"], "ゲスト"),
+            "role_name": role_names.get(c["role_id"], "不明"),
+            "pre_opinion": c["pre_opinion"] or "",
+            "reflection": c["reflection"],
+            "message_count": c["message_count"],
+        }
+        for c in db.read_lesson_conversations(material_set_id)
+    ]
 
 
 def get_material_text(material_id: str, range_start: int | None = None, range_end: int | None = None):
@@ -1488,6 +1562,9 @@ def chat(
     role = find_conversation_role(role_id, material_set) if role_id else None
     if role is None:
         raise HTTPException(status_code=400)
+    if existing is None and not can_start_conversation(request, material_set):
+        # 授業が終わった教材セットでは、新しい対話を始められない（#43）。始めていた会話は続けられる
+        raise HTTPException(status_code=403)
     # すでにある会話は、同じロールでしか続けられない（ほかのロールの会話に混ぜない）
     if existing is not None and existing["role_id"] != role["id"]:
         raise HTTPException(status_code=400)

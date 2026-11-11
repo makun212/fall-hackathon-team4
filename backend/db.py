@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     create_engine,
     event,
+    func,
     delete,
     insert,
     select,
@@ -100,6 +101,18 @@ candidate_sets = Table(
     Column("roles", JSON, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     UniqueConstraint("material_id", "range_start", "range_end"),
+)
+
+# 授業（#43）。教師が教材セットで授業を開始すると1件でき、終了すると ended_at が入る
+# 開始中（ended_at が空）の授業がある教材セットだけが、生徒のトップに出て、新しい対話を始められる
+lessons = Table(
+    "lessons",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("material_set_id", String(64), nullable=False, index=True),
+    Column("teacher_id", String(128)),
+    Column("started_at", DateTime(timezone=True), nullable=False),
+    Column("ended_at", DateTime(timezone=True)),
 )
 
 # 教師がロールの編集画面で保存した内容（#13）。name が None なら「元に戻した」
@@ -485,3 +498,70 @@ def get_candidate_set(candidate_set_id: str):
     with get_engine().connect() as conn:
         row = conn.execute(select(candidate_sets).where(candidate_sets.c.id == candidate_set_id)).first()
     return dict(row._mapping) if row else None
+
+
+# ---- 授業（#43） ----
+
+
+def get_open_lesson(material_set_id: str):
+    # 開始中の授業。なければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(
+            select(lessons)
+            .where(lessons.c.material_set_id == material_set_id, lessons.c.ended_at.is_(None))
+            .order_by(lessons.c.id.desc())
+        ).first()
+    return dict(row._mapping) if row else None
+
+
+def get_last_lesson(material_set_id: str):
+    # いちばん新しい授業（終了したものも含む）。なければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(
+            select(lessons).where(lessons.c.material_set_id == material_set_id).order_by(lessons.c.id.desc())
+        ).first()
+    return dict(row._mapping) if row else None
+
+
+def start_lesson(material_set_id: str, teacher_id: str | None = None):
+    # 授業を開始する。すでに開始中なら、その授業を返す（二重に開始しない）
+    with get_engine().begin() as conn:
+        exists = conn.execute(
+            select(lessons.c.id).where(lessons.c.material_set_id == material_set_id, lessons.c.ended_at.is_(None))
+        ).first()
+        if exists is None:
+            conn.execute(insert(lessons).values(material_set_id=material_set_id, teacher_id=teacher_id, started_at=now()))
+    return get_open_lesson(material_set_id)
+
+
+def end_lesson(material_set_id: str) -> bool:
+    # 開始中の授業を終了する。終了できたら True
+    with get_engine().begin() as conn:
+        result = conn.execute(
+            update(lessons)
+            .where(lessons.c.material_set_id == material_set_id, lessons.c.ended_at.is_(None))
+            .values(ended_at=now())
+        )
+    return result.rowcount > 0
+
+
+def open_lesson_set_ids():
+    # 授業が開始中の教材セットの ID
+    with get_engine().connect() as conn:
+        return {r.material_set_id for r in conn.execute(select(lessons.c.material_set_id).where(lessons.c.ended_at.is_(None)))}
+
+
+def read_lesson_conversations(material_set_id: str):
+    # 教材セットの会話（授業の画面で、提出状況を出すため）。古い順
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(conversations).where(conversations.c.material_set_id == material_set_id).order_by(conversations.c.created_at)
+        ).all()
+        counts = dict(
+            conn.execute(
+                select(chat_messages.c.conversation_id, func.count())
+                .where(chat_messages.c.conversation_id.in_([r.id for r in rows]), chat_messages.c.role == "user")
+                .group_by(chat_messages.c.conversation_id)
+            ).all()
+        )
+    return [{**dict(r._mapping), "message_count": counts.get(r.id, 0)} for r in rows]

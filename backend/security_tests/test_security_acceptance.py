@@ -101,6 +101,7 @@ class SecurityAcceptanceTests(unittest.TestCase):
         self.assert_access_denied(response)
 
     def test_conversation_cannot_switch_material_set_with_same_role(self):
+        db.start_lesson("ms001")  # 生徒が選べるのは、授業が開始中の教材セットだけ（#43）
         self.app.get("/student/roles?set=ms001")
         response = self.app.post("/student/question", data={"role_id": "r002", "opinion": "考え"}, follow_redirects=False)
         self.conversation_id = re.search(r"conversation_id=([0-9a-f]{32})", response.headers["location"]).group(1)
@@ -156,6 +157,7 @@ class SecurityAcceptanceTests(unittest.TestCase):
         self.assertEqual(2, len(self.models.calls))
 
     def test_fabricated_and_out_of_range_evidence_is_not_displayed(self):
+        db.start_lesson("ms001")  # 生徒が選べるのは、授業が開始中の教材セットだけ（#43）
         self.app.get("/student/roles?set=ms001")
         self.models.evidence = [{"paragraph_id": "p046", "quote": "棄て難きはエリスが愛"}, {"paragraph_id": "p001", "quote": "作り話の引用"}]
         response = self.send("根拠は？")
