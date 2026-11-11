@@ -49,7 +49,6 @@
           {% set role_id = role["id"] %}
           {% set role_name = role["name"] %}
           {% set role_features = role["features"] %}
-          {% set role_image = role["image"] %}
 
           <label class="group/item relative block cursor-pointer">
             {# 見た目だけを隠す（display:none にしない。キーボードで選べるようにするため）。name と value はフォームの送信内容なので変えない #}
@@ -60,12 +59,9 @@
               <svg class="absolute -top-2 right-[18px] hidden drop-shadow-[0_2px_2px_rgb(0_0_0/0.25)] group-has-checked/item:block" aria-hidden="true" width="30" height="46" viewBox="0 0 30 46"><path d="M0 0H30V46L15 37L0 46Z" fill="var(--color-crimson)"/></svg>
 
               <div class="flex items-center gap-3 pr-7">
-                {# 頭文字の丸。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+                {# 頭文字の丸。画像は使わない #}
                 <span class="relative flex size-[38px] flex-none items-center justify-center overflow-hidden rounded-full bg-crimson font-['Noto_Serif_JP',serif] text-base font-bold text-kinari" aria-hidden="true">
                   {{ role_name[:1] }}
-                  {% if role_image %}
-                    <img src="/static/{{ role_image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">
-                  {% endif %}
                 </span>
                 <span class="font-['Noto_Serif_JP',serif] text-[17px] leading-normal font-bold [word-break:auto-phrase] text-balance">{{ role_name }}</span>
               </div>

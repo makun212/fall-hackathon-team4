@@ -139,10 +139,9 @@
           <ul class="m-0 p-0 list-none grid grid-cols-1 xs:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
             {% for role in selected.roles %}
               <li class="min-h-14 flex items-center gap-2.5 px-3.5 py-2 border border-cream-line rounded-[10px] bg-kinari">
-                {# 丸い印：ロール名の最初の1文字。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+                {# 丸い印：ロール名の最初の1文字。画像は使わない #}
                 <span class="relative flex-none size-8 rounded-full overflow-hidden bg-crimson flex items-center justify-center font-serif text-sm font-bold text-[#FFF8E7]" aria-hidden="true">
                   {{ role.name[:1] }}
-                  {% if role.image %}<img src="/static/{{ role.image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">{% endif %}
                 </span>
                 <span class="min-w-0 text-sm font-bold leading-normal break-words">{{ role.name }}</span>
               </li>

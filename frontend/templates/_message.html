@@ -4,13 +4,12 @@
 
 {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
 {% set role_name = role["name"] if role else None %}
-{% set role_image = role["image"] if role else None %}
 
 {# 自分の発言（右寄せ。丸は出さない） #}
 {{ chat_msg("me", "あなた", user_message) }}
 
 {# 相手の発言（左に頭文字の丸） #}
-{% call chat_msg("ai", role_name or "AI", reply, role_name[:1] if role_name else "AI", role_image) %}
+{% call chat_msg("ai", role_name or "AI", reply, role_name[:1] if role_name else "AI") %}
   {# 根拠があるときだけボタンを出す。押すと、下の template の中身が根拠パネルに入る（index.html の script） #}
   {% if evidence %}
     <div data-evidence class="mt-1">
