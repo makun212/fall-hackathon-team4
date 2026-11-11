@@ -1,14 +1,62 @@
-{# 生徒用：対話の終了画面（Figma 16 の仮の画面） #}
+{# 生徒用：対話の終了画面（第3案：次の行き先カード）。main.py からは何も渡さない #}
+{# 見た目の基準は docs/reference/end-3.html。CSSファイルは作らず、参照HTMLの CSS を Tailwind のクラスに置き換えている（student_reflection.html と同じ書き方） #}
+{# 配色は base.html の @theme の名前で書いている（深紅 crimson／濃い赤 crimson-dark／生成り kinari／背景 cream／紙の白 cream-paper／文字 sepia／補助文字 sepia-muted／線 cream-line） #}
 {% extends "base.html" %}
-{% from "_components.html" import page_header, btn_secondary %}
+
+{# 移動先は、ここだけで定義する。どちらも既存のルート（教材選択＝生徒用トップ「教材をえらぶ」、トップ＝ウェルカム画面） #}
+{% set materials_href = "/student" %}
+{% set top_href = "/" %}
 
 {% block title %}対話は終了しました | {% endblock %}
 
+{% block head %}
+{# 書体：本文は Noto Sans JP、題名・見出しは Noto Serif JP（デザインの基準どおり、この画面だけで読み込む） #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{% endblock %}
+
+{% block body_class %}bg-cream text-sepia{% endblock %}
+
+{# 上部バー：base.html のヘッダーと同じ中身（リンク先も同じ）で、背景を紙の白、下線を深紅にする（student_reflection.html と同じ） #}
+{% block header %}
+<header class="bg-cream-paper border-b-2 border-crimson text-sepia">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8">
+    <a href="/" class="inline-flex items-center min-h-14 font-['Noto_Serif_JP',serif] text-lg font-bold tracking-[0.08em] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">よみより</a>
+  </div>
+</header>
+{% endblock %}
+
+{# カードの見た目（2つで共通）。枠はどちらも深紅の2px #}
+{% set _card = "relative flex flex-col gap-1.5 py-[22px] pr-[52px] pl-6 bg-cream-paper border-2 border-crimson rounded-[14px] text-sepia no-underline hover:bg-kinari focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink" %}
+
+{% macro next_card(href, title, desc) %}
+<a href="{{ href }}" class="{{ _card }}">
+  <b class="font-['Noto_Serif_JP',serif] text-[19px] font-bold text-crimson-dark">{{ title }}</b>
+  <span class="text-sm leading-[1.7] text-sepia-muted">{{ desc }}</span>
+  <span class="absolute right-5 top-1/2 -translate-y-1/2 text-[22px] leading-none text-crimson" aria-hidden="true">→</span>
+</a>
+{% endmacro %}
+
 {% block content %}
-{{ page_header("対話は終了しました") }}
-<div class="flex flex-col gap-6">
-  <p>感想を先生に送りました。おつかれさまでした。</p>
-  {# 終了画面の移動先は、チームで未定。決まったら、ここを直す #}
-  <div>{{ btn_secondary("最初の画面に戻る", href="/student") }}</div>
+{# 本文の幅は、基準HTMLの820px（左右の余白32pxずつを含む）から余白を引いた756px。main の左右の余白は32px。640px未満は、左右を12pxずつ広げて余白を20pxにする #}
+<div class="max-w-[756px] mx-auto max-sm:-mx-3 flex flex-col items-start gap-[26px] pt-8 max-sm:pt-3 pb-6 font-['Noto_Sans_JP',sans-serif] text-base leading-normal text-sepia">
+  <div class="flex flex-col items-start gap-3">
+    {# 送信の完了は、アイコンだけでなく文字でも伝える #}
+    <p role="status" class="m-0 inline-flex items-center gap-2 text-[15px] font-bold text-[#2E5A2A]">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2E5A2A" stroke-width="3" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M7 12.5l3.5 3.5L17 9"/></svg>
+      送信しました
+    </p>
+    <h1 class="m-0 pb-2 border-b-3 border-crimson font-['Noto_Serif_JP',serif] text-[28px] max-sm:text-[23px] font-bold leading-normal [word-break:auto-phrase] text-balance">対話は終了しました</h1>
+    <p class="m-0 text-[17px] leading-[1.9] text-sepia-muted">感想を先生に送りました。おつかれさまでした。</p>
+  </div>
+
+  {# 見出し「このあと」は画面に出さない。読み上げ用に、移動先のまとまりの名前としてだけ残す #}
+  <nav class="w-full" aria-label="このあと">
+    <div class="grid grid-cols-2 max-sm:grid-cols-1 gap-4 max-sm:gap-3">
+      {{ next_card(materials_href, "教材選択に戻る", "ほかの教材で、もう一度対話する。") }}
+      {{ next_card(top_href, "トップに戻る", "最初の画面に戻る。") }}
+    </div>
+  </nav>
 </div>
 {% endblock %}

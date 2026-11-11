@@ -367,6 +367,55 @@ def get_conversation_detail(conversation_id: str):
         ],
     }
 
+def get_submission_status():
+    # 教師用「感想の提出状況」：会話を始めた生徒（会話1件＝1人）を、提出済みと未提出に分ける
+    # 提出済みは提出が早い順（時刻の記録がないものは最後）。未提出は会話を始めた順
+    records = read_chat_records()
+    # ダミーデータの感想（post_opinion があるもの）と、DBの感想を合わせる。キー名をそろえるのはここだけ
+    reflections = {
+        r["conversation_id"]: {
+            "pre_opinion": r.get("pre_opinion") or "",
+            "reflection": r["post_opinion"],
+            "reflected_at": r.get("submitted_at"),
+        }
+        for r in SEED_DATA.get("reflections", [])
+        if r.get("post_opinion")
+    }
+    reflections.update(db.read_reflections())
+
+    submitted, not_submitted = [], []
+    for conversation in sorted(records["conversations"], key=lambda c: datetime.fromisoformat(c["created_at"])):
+        student = {
+            "conversation_id": conversation["id"],
+            "student_name": records["user_names"].get(conversation["student_id"], "不明"),
+        }
+        reflection = reflections.get(conversation["id"])
+        if reflection is None:
+            not_submitted.append(student)
+            continue
+        time_text = reflection["reflected_at"]
+        submitted_time = datetime.fromisoformat(time_text) if time_text else None
+        student["submitted_at"] = submitted_time.strftime("%H:%M") if submitted_time else None
+        # ポップアップ「感想を見る」に出す本文と教材名
+        student["pre_opinion"] = reflection["pre_opinion"]
+        student["reflection"] = reflection["reflection"]
+        student["material_title"] = records["material_set_titles"].get(conversation["material_set_id"]) or ""
+        student["_sort_time"] = submitted_time
+        submitted.append(student)
+
+    submitted.sort(key=lambda s: (s["_sort_time"] is None, s["_sort_time"] or datetime.min))
+    for student in submitted:
+        del student["_sort_time"]
+
+    material_set_ids = dict.fromkeys(c["material_set_id"] for c in records["conversations"])
+    titles = [t for t in (records["material_set_titles"].get(i) for i in material_set_ids) if t]
+    return {
+        "material_set_title": "、".join(titles),
+        "submitted": submitted,
+        "not_submitted": not_submitted,
+    }
+
+
 # ---- 教師用：教材と使用範囲の選択 ----
 
 # 教材と範囲を決めたあとの移動先（ロール候補の選択画面）。URLを変えるときはここだけ直す
@@ -1299,6 +1348,22 @@ def teacher_chat_detail(request: Request, conversation_id: str):
             "material_title": detail["material_title"],
             "role_summary": detail["role_summary"],
             "messages": detail["messages"],
+        },
+    )
+
+
+# 教師用：感想の提出状況。会話を始めた生徒を、提出済みと未提出に分けて見せる
+# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+@app.get("/teacher/submissions", response_class=HTMLResponse)
+def teacher_submissions(request: Request):
+    status = get_submission_status()
+    return templates.TemplateResponse(
+        request,
+        "teacher_submissions.html",
+        {
+            "material_set_title": status["material_set_title"],
+            "submitted": status["submitted"],
+            "not_submitted": status["not_submitted"],
         },
     )
 

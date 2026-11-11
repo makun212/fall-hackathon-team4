@@ -7,8 +7,8 @@
 {% set back_url = "/teacher" %}
 {% set new_url = "/teacher/materials" %}
 
-{# 授業の画面へのURL。URLを変えるときはここだけ直す #}
-{% macro lesson_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/lesson{% endmacro %}
+{# 授業を開始したときの移動先。白い仮の画面を挟まずに、生徒のチャット一覧へ直接移る。URLを変えるときはここだけ直す #}
+{% macro lesson_url(ms) %}/teacher/chats{% endmacro %}
 
 {% block title %}作成した教材セット | {% endblock %}
 

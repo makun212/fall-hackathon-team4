@@ -4,7 +4,8 @@
 {# 移動先は、ここだけで定義する #}
 {% set new_url = "/teacher/materials" %}
 {% macro edit_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/edit{% endmacro %}
-{% macro lesson_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/lesson{% endmacro %}
+{# 授業開始を押したら、白い仮の画面を挟まずに、生徒のチャット一覧へ直接移る #}
+{% macro lesson_url(ms) %}/teacher/chats{% endmacro %}
 
 {% if selected is none %}
   <div class="flex flex-col items-start gap-4">

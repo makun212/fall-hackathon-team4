@@ -354,6 +354,28 @@ def read_chat_records():
     }
 
 
+def read_reflections():
+    # 教師用「感想の提出状況」に使う。感想を提出した会話の
+    # {会話ID: {"pre_opinion": 最初の感想, "reflection": 最後の感想, "reflected_at": 提出時刻（JSTの文字列。記録がなければ None）}}
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(
+                conversations.c.id,
+                conversations.c.pre_opinion,
+                conversations.c.reflection,
+                conversations.c.reflected_at,
+            ).where(conversations.c.reflection.is_not(None))
+        ).all()
+    return {
+        r.id: {
+            "pre_opinion": r.pre_opinion or "",
+            "reflection": r.reflection or "",
+            "reflected_at": to_jst_text(r.reflected_at) if r.reflected_at else None,
+        }
+        for r in rows
+    }
+
+
 # ---- ロールの編集と教材セット（#13） ----
 
 
