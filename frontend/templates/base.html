@@ -46,6 +46,19 @@
       --font-serif: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif;
       --breakpoint-xs: 30rem;         /* 480px。本棚の本の大きさを切り替える */
     }
+
+    /* 罫線入りの入力欄（ノートの線）。文字の大きさ16px・行の高さ36px（leading-9）・上の余白10px（pt-2.5）の textarea で使う */
+    /* 罫線は36pxごとの1本の線を縦に繰り返す。background-attachment: local で、スクロールしても文字と一緒に動く */
+    /* 縦の位置（background-position の2つ目の値）を大きくすると罫線が下がる。今はベースラインの約7px下 */
+    /* 上の余白（pt-2.5）を変えたら、変えた分だけ縦の位置も動かす */
+    @utility ruled-lines {
+      background-image: linear-gradient(to bottom, transparent 0, transparent 35px, var(--color-cream-line) 35px, var(--color-cream-line) 36px);
+      background-size: 100% 36px;
+      background-repeat: repeat-y;
+      background-attachment: local;
+      background-origin: padding-box;
+      background-position: 0 7px;
+    }
   </style>
   {% block head %}{% endblock %}
 </head>

@@ -88,7 +88,7 @@
         <textarea id="opinion" name="opinion" rows="5" required maxlength="{{ opinion_max_length }}"
                   placeholder="例：私は〜だと思う。なぜなら、〜だからだ。"
                   aria-describedby="opinion-count"
-                  class="block w-full min-h-[218px] resize-y px-[18px] pt-2.5 pb-11 text-base leading-9 text-sepia bg-cream-paper bg-local bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_35px,var(--color-cream-line)_35px,var(--color-cream-line)_36px)] border border-cream-line rounded-[10px] placeholder:text-sepia-muted/85 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:border-crimson">{{ opinion }}</textarea>
+                  class="block w-full min-h-[218px] resize-y px-[18px] pt-2.5 pb-11 text-base leading-9 text-sepia bg-cream-paper ruled-lines border border-cream-line rounded-[10px] placeholder:text-sepia-muted/85 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:border-crimson">{{ opinion }}</textarea>
         <p id="opinion-count" class="absolute right-[18px] bottom-3 m-0 text-[13px] text-sepia-muted tabular-nums pointer-events-none"><span id="opinion-count-now">0</span> / {{ opinion_max_length }}文字</p>
       </div>
     </div>
