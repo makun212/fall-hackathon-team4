@@ -3,7 +3,7 @@
 {# 配色は base.html の @theme の名前で書いている（深紅 crimson／濃い赤 crimson-dark／生成り kinari／背景 cream／紙の白 cream-paper／金 gold／文字 sepia／補助文字 sepia-muted／線 cream-line） #}
 {# 「送信」の見た目の切り替えは CSS だけ（form の group/form と、textarea の :placeholder-shown）。:has() 非対応のブラウザでは、常に薄い色のままになるだけで、送信は壊れない #}
 {% extends "base.html" %}
-{% from "_components.html" import chat_avatar %}
+{% from "_components.html" import chat_avatar, chat_msg %}
 
 {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
 {% set role_name = role["name"] if role else None %}
@@ -62,6 +62,10 @@
     <div id="chat-scroll" tabindex="0" aria-label="対話の記録（スクロールできます）"
          class="h-[400px] max-sm:h-[56vh] max-sm:min-h-[300px] overflow-y-auto [scrollbar-gutter:stable] p-5 max-sm:p-3.5 bg-cream-paper border border-cream-line rounded-xl focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink">
       {# 発言の追加先。1件の見た目は _components.html の chat_msg #}
+      {# 送信した直後に出す、自分の吹き出しのひな形（下の script が文を入れて #chat に足す） #}
+      {# 返事が来たら、サーバーが返す _message.html の自分の吹き出しと入れ替える。失敗したときは残して「送信できませんでした」を付ける #}
+      {# #chat の後ろには置かない（下の案内が #chat:empty+& で #chat のすぐ後ろを見ているため） #}
+      <template id="me-msg-template">{{ chat_msg("me", "あなた", "") }}</template>
       <div id="chat" class="flex flex-col gap-[18px]" role="log" aria-live="polite" aria-label="対話の記録"></div>
 
       {# まだ発言がないときだけ出る案内（#chat が空のとき）。送信中は消す #}
@@ -141,6 +145,36 @@
     const panelTitle = document.getElementById("evidence-title");
     const panelBody = document.getElementById("evidence-body");
     const chatScroll = document.getElementById("chat-scroll");
+    const chat = document.getElementById("chat");
+    const meTemplate = document.getElementById("me-msg-template");
+
+    // ---- 送信した時点で、自分の吹き出しを出す ----
+    // サーバーの返事（_message.html）にも自分の吹き出しが入っているので、返事が来たら仮の吹き出しを消して入れ替える
+    let pending = null;
+    form.addEventListener("htmx:beforeRequest", () => {
+      const msg = meTemplate.content.firstElementChild.cloneNode(true);
+      msg.querySelector("p").textContent = input.value;
+      chat.append(msg);
+      pending = msg;
+    });
+    form.addEventListener("htmx:beforeSwap", (e) => {
+      if (e.detail.shouldSwap && pending) {
+        pending.remove();
+        pending = null;
+      }
+    });
+    // 失敗したときは吹き出しを残し、枠を深紅にして「送信できませんでした」を付ける
+    const markFailed = () => {
+      if (!pending) return;
+      const bubble = pending.querySelector("p");
+      bubble.classList.remove("border", "border-gold");
+      bubble.classList.add("border-2", "border-crimson");
+      const note = document.createElement("p");
+      note.className = "m-0 text-[13px] font-bold text-crimson-dark";
+      note.textContent = "送信できませんでした";
+      bubble.after(note);
+      pending = null;
+    };
 
     // ---- やり取りの枠を一番下まで進める ----
     // 返事が来たときは hx-swap の scroll が進める。送信した直後は「考え中…」が見えるように、ここで進める
@@ -169,6 +203,7 @@
       other: "うまく送信できませんでした。もう一度送ってみてください。",
     };
     const showError = (text) => {
+      markFailed();
       errorText.textContent = text;
       errorBox.hidden = false;
     };
