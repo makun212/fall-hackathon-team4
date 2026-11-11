@@ -223,6 +223,7 @@ def read_chat_records():
             {
                 "id": m["id"],
                 "conversation_id": m["conversation_id"],
+                "role": m["role"],
                 "text": m["text"],
                 "sent_at": m["sent_at"],
             }
@@ -323,6 +324,48 @@ def find_conversation_summary(conversation_id: str):
         if summary["conversation_id"] == conversation_id:
             return summary
     return None
+
+
+def get_conversation_detail(conversation_id: str):
+    # 閲覧画面用：会話の発言一覧（古い順）と、教材名・ロールの説明を返す。会話がなければ None
+    # 発言の形: is_student（True / False）、text、detections（その発言の検知。強い順）
+    records = read_chat_records()
+    conversation = next((c for c in records["conversations"] if c["id"] == conversation_id), None)
+    if conversation is None:
+        return None
+
+    detections_by_message = {}
+    for d in records["detections"]:
+        detections_by_message.setdefault(d["message_id"], []).append(
+            {
+                "type": d["type"],
+                "level": d["level"],
+                "type_label": DETECTION_TYPE_LABELS.get(d["type"], d["type"]),
+                "level_label": DETECTION_LEVEL_LABELS.get(d["level"], d["level"]),
+            }
+        )
+
+    messages = sorted(
+        (m for m in records["messages"] if m["conversation_id"] == conversation_id),
+        key=lambda m: datetime.fromisoformat(m["sent_at"]),
+    )
+    role_source = find_role_source(conversation["role_id"]) or {}
+    return {
+        "material_title": records["material_set_titles"].get(conversation["material_set_id"]),
+        "role_summary": role_source.get("summary") or "",
+        "messages": [
+            {
+                "is_student": m["role"] == "user",
+                "text": m["text"],
+                "detections": sorted(
+                    detections_by_message.get(m["id"], []),
+                    key=lambda d: DETECTION_LEVEL_RANK.get(d["level"], 0),
+                    reverse=True,
+                ),
+            }
+            for m in messages
+        ],
+    }
 
 # ---- 教師用：教材と使用範囲の選択 ----
 
@@ -1239,7 +1282,7 @@ def teacher_chats(request: Request, only_detected: int = 0):
     )
 
 
-# 教師用：チャット閲覧画面（仮）。次のissue「チャット閲覧画面と検知結果の表示」で本物にする
+# 教師用：チャット閲覧画面。会話の発言と検知を、生徒に表示された形で見せる
 # TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
 @app.get("/teacher/chats/{conversation_id}", response_class=HTMLResponse)
 def teacher_chat_detail(request: Request, conversation_id: str):
@@ -1247,8 +1290,16 @@ def teacher_chat_detail(request: Request, conversation_id: str):
     conversation = find_conversation_summary(conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="会話が見つかりません")
+    detail = get_conversation_detail(conversation_id)
     return templates.TemplateResponse(
-        request, "teacher_chat_detail.html", {"conversation": conversation}
+        request,
+        "teacher_chat_detail.html",
+        {
+            "conversation": conversation,
+            "material_title": detail["material_title"],
+            "role_summary": detail["role_summary"],
+            "messages": detail["messages"],
+        },
     )
 
 

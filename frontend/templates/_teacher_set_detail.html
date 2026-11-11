@@ -31,7 +31,6 @@
         <li class="flex items-center gap-2.5 min-h-14 px-3.5 py-2 border border-cream-line rounded-[10px] bg-kinari">
           <span class="relative shrink-0 flex items-center justify-center size-[30px] rounded-full overflow-hidden bg-crimson font-serif text-sm font-bold text-kinari" aria-hidden="true">
             {{ role.name[:1] }}
-            {% if role.image %}<img src="/static/{{ role.image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">{% endif %}
           </span>
           <span class="min-w-0 text-base font-bold leading-tight break-words">{{ role.name }}</span>
         </li>

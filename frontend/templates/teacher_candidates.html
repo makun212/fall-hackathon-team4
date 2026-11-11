@@ -62,10 +62,9 @@
           <svg class="hidden group-has-checked:block absolute -top-2 right-[18px] drop-shadow-[0_2px_2px_rgb(0_0_0/0.25)]" aria-hidden="true" width="28" height="42" viewBox="0 0 30 46"><path d="M0 0H30V46L15 37L0 46Z" fill="#A61E22"/></svg>
 
           <div class="flex items-center gap-3 pr-[30px] min-w-0">
-            {# 頭文字の丸。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+            {# 頭文字の丸。画像は使わない #}
             <span class="relative flex-none flex items-center justify-center size-[38px] overflow-hidden rounded-full bg-crimson font-serif text-base font-bold text-kinari" aria-hidden="true">
               {{ c.name[:1] }}
-              {% if c.image %}<img src="/static/{{ c.image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">{% endif %}
             </span>
             <h2 class="m-0 min-w-0 font-serif text-base font-bold leading-normal [word-break:auto-phrase] text-balance [overflow-wrap:anywhere]">{{ c.name }}</h2>
           </div>

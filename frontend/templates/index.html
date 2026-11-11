@@ -9,7 +9,6 @@
 {% set role_name = role["name"] if role else None %}
 {% set role_summary = role["summary"] if role else None %}
 {% set role_id = role["id"] if role else None %}
-{% set role_image = role["image"] if role else None %}
 {# 感想入力の画面への移動先は、ここだけで定義する #}
 {% set reflection_url = "/student/reflection?role_id=" ~ role_id|urlencode ~ ("&conversation_id=" ~ conversation_id|urlencode if conversation_id else "") if role_id else None %}
 
@@ -42,7 +41,7 @@
     {% if role_name %}
       <div class="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 pb-3.5 border-b border-cream-line">
         <div class="flex items-center gap-3 min-w-0">
-          {{ chat_avatar(role_name[:1], role_image) }}
+          {{ chat_avatar(role_name[:1]) }}
           <div class="flex flex-col gap-0.5 min-w-0">
             <h1 class="m-0 font-['Noto_Serif_JP',serif] text-[17px] font-bold leading-normal [overflow-wrap:anywhere]">{{ role_name }}と対話中</h1>
             {% if role_summary %}
@@ -71,9 +70,9 @@
       {# 返事を待つ間だけ出る吹き出し。htmx が送信中に htmx-request を付け、返事が来たら外す #}
       {# 見た目は chat_msg の相手の吹き出しとそろえる #}
       <div id="typing" class="hidden [&.htmx-request]:flex items-start gap-2.5 mt-[18px] [#chat:empty~&]:mt-0" role="status">
-        {{ chat_avatar(role_name[:1] if role_name else "AI", role_image) }}
+        {{ chat_avatar(role_name[:1] if role_name else "AI") }}
         <p class="m-0 inline-flex items-center gap-2 px-4 py-3 bg-kinari border border-gold rounded-[4px_14px_14px_14px] text-[15px] text-sepia-muted">
-          {{ role_name ~ "が考えています" if role_name else "AIが考えています" }}
+          考え中
           <span class="inline-flex gap-1" aria-hidden="true">
             <span class="size-1.5 rounded-full bg-crimson-dark animate-pulse motion-reduce:animate-none"></span>
             <span class="size-1.5 rounded-full bg-crimson-dark animate-pulse motion-reduce:animate-none [animation-delay:300ms]"></span>
@@ -144,7 +143,7 @@
     const chatScroll = document.getElementById("chat-scroll");
 
     // ---- やり取りの枠を一番下まで進める ----
-    // 返事が来たときは hx-swap の scroll が進める。送信した直後は「考えています…」が見えるように、ここで進める
+    // 返事が来たときは hx-swap の scroll が進める。送信した直後は「考え中…」が見えるように、ここで進める
     const scrollToBottom = () => { chatScroll.scrollTop = chatScroll.scrollHeight; };
     form.addEventListener("htmx:beforeRequest", () => setTimeout(scrollToBottom));
 
