@@ -27,8 +27,15 @@
 </style>
 {% endblock %}
 
+{# 授業の画面から来たときは ?set=教材セットのID が付く。絞り込み・閲覧画面へ引き継ぎ、「戻る」をその授業の画面にする #}
+{# 戻り先は /teacher/material-sets/{ID}/lesson の形にだけ組み立てる（外のサイトへは行かない）。値が無ければ、教材セット選択へ戻る #}
+{% set from_set = request.query_params.get("set", "") %}
+{% set set_q = ("set=" ~ (from_set | urlencode)) if from_set else "" %}
+{% set back_url = ("/teacher/material-sets/" ~ (from_set | urlencode) ~ "/lesson") if from_set else "/teacher" %}
+{% set back_label = "授業の画面に戻る" if from_set else "戻る" %}
+
 {# 閲覧画面へのURL。URLを変えるときはここだけ直す #}
-{% macro chat_url(c) %}/teacher/chats/{{ c.conversation_id }}{% endmacro %}
+{% macro chat_url(c) %}/teacher/chats/{{ c.conversation_id }}{% if set_q %}?{{ set_q }}{% endif %}{% endmacro %}
 
 {# 最後の発言。全角30文字を超えたら、30文字で切って「…」を付ける #}
 {% macro last_message(c) %}{% if c.last_message | length > 30 %}{{ c.last_message[:30] }}…{% else %}{{ c.last_message }}{% endif %}{% endmacro %}
@@ -55,8 +62,8 @@
   </div>
 
   <nav aria-label="絞り込み" class="flex flex-wrap gap-2.5">
-    {{ filter_link("すべて", "/teacher/chats", not only_detected) }}
-    {{ filter_link("検知ありのみ", "/teacher/chats?only_detected=1", only_detected) }}
+    {{ filter_link("すべて", "/teacher/chats" ~ ("?" ~ set_q if set_q else ""), not only_detected) }}
+    {{ filter_link("検知ありのみ", "/teacher/chats?only_detected=1" ~ ("&" ~ set_q if set_q else ""), only_detected) }}
   </nav>
 
   {% if total_count == 0 %}
@@ -109,6 +116,6 @@
     <span class="text-xs text-sepia-muted">一覧は、枠の中でスクロールできます。見出しは固定されます。</span>
   {% endif %}
 
-  <div><a href="/teacher" class="{{ btn_cls }} border-rose-line bg-cream-paper text-crimson-dark hover:bg-kinari">戻る</a></div>
+  <div><a href="{{ back_url }}" class="{{ btn_cls }} border-rose-line bg-cream-paper text-crimson-dark hover:bg-kinari">{{ back_label }}</a></div>
 </div>
 {% endblock %}

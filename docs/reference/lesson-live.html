@@ -1,0 +1,80 @@
+<!doctype html><html lang="ja"><head>
+<title>よみより｜教師用 教材セットの授業画面（授業中 見た目の基準・静的HTML）</title>
+<!-- 教師用「◯◯ の授業」画面の基準（タブレット比 4:3 で 1 画面に収める）。
+  - ヘッダーは「教材を選ぶ」だけ。「生徒のチャット一覧」「感想の提出状況」は出さない。
+  - 一覧（.sc2）だけが枠の中でスクロールする。ページ全体は動かさない。
+  - 「教材の実施状況」の文言は仮。遷移先が既にある場合だけ表示する。 -->
+<title>よみより｜教師用 感想の提出状況（案2 未提出と提出済みの2列 見た目の基準・静的HTML）</title>
+<!-- 教師用「感想の提出状況」の見た目の基準。
+  - 提出時刻（.tm）は、バックエンドに記録がある場合だけ表示する。無ければ .tm の要素ごと省く。
+  - 「感想を見る」のリンク先は、既存のものを使う（無ければ、ボタンごと省かず、止めて確認する）。
+  - 「要確認」の印は出さない。--><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+<style>
+:root{--red:#A61E22;--red-dark:#8E1B1F;--cream:#FBF1DC;--paper:#FFFDF8;--bg:#F7F0E3;--gold:#E4C26A;--ink:#2B2118;--sub:#5C4B3B;--line:#E5D9C3;--ok:#2E5A2A}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:'Noto Sans JP',sans-serif}a{text-decoration:none}
+.nav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;min-height:56px;padding:0 32px;background:var(--paper);border-bottom:2px solid var(--red)}
+.nl{display:flex;align-items:center;gap:12px;align-self:stretch}.logo{font-family:'Noto Serif JP',serif;font-weight:700;font-size:18px;letter-spacing:.08em}
+.badge{padding:2px 10px;border-radius:999px;background:#F8DADA;color:var(--red-dark);font-size:12px;font-weight:700}
+.ni{margin-left:8px;align-self:stretch;display:flex;align-items:center;font-size:14px;color:var(--sub)}.ni.cur{margin-left:0;border-bottom:3px solid var(--red);font-weight:700;color:var(--red-dark)}
+.top{min-height:40px;padding:0 18px;display:flex;align-items:center;border:1px solid #C9A9A3;border-radius:10px;background:var(--paper);font-size:14px;font-weight:700;color:var(--red-dark)}
+.main{max-width:960px;margin:0 auto;padding:26px 32px 36px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0 0 8px;display:table;padding-bottom:6px;border-bottom:3px solid var(--red);font-family:'Noto Serif JP',serif;font-size:26px}
+.mat{font-size:14px;color:var(--sub)}
+.tag{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap}
+.t-ok{background:#E9F3E6;border:1.5px solid #6E9A66;color:var(--ok)}.t-no{background:var(--paper);border:1.5px dashed #8A7A68;color:var(--sub)}.t-al{background:#FBE3E3;border:2px solid var(--red);color:var(--red-dark)}
+.ob{min-height:36px;padding:0 14px;display:inline-flex;align-items:center;border:1px solid #C9A9A3;border-radius:8px;background:var(--paper);font-size:13px;font-weight:700;color:var(--red-dark);white-space:nowrap}
+.bar{height:12px;border-radius:999px;background:#E8DCC4;overflow:hidden}.bar i{display:block;height:100%;background:var(--red)}
+.big{font-family:'Noto Serif JP',serif;font-weight:700}
+.note{font-size:12px;color:var(--sub)}
+@media(max-width:640px){.nav{padding:0 16px}.main{padding:20px 16px 28px}}
+.hero{display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px}.hero .big{font-size:30px}.hero .big small{font-size:15px;margin-left:4px}.hero .bar{flex:1;min-width:220px}
+.cols{display:grid;grid-template-columns:5fr 7fr;gap:16px;align-items:start}
+.pn{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px}.pn.warn{background:var(--cream);border:2px solid var(--gold)}
+.pn h2{margin:0 0 4px;font-family:'Noto Serif JP',serif;font-size:18px}.pn .note{display:block;margin-bottom:10px}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}li:first-child{border-top:0}li>span:first-child{flex:1;font-weight:700}.tm{font-size:13px;color:var(--sub)}
+.warn li{border-color:#E4D3AC}
+@media(max-width:640px){.cols{grid-template-columns:1fr}}
+.main{gap:20px}.ob{min-height:44px;padding:0 20px;font-size:15px}.cta{min-height:48px;padding:0 30px;border-radius:10px;background:var(--red);color:#fff;border-bottom:3px solid var(--gold);display:inline-flex;align-items:center;font-size:16px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
+.st{display:inline-block;padding:3px 12px;border-radius:6px;border:1.5px dashed #8A7A68;background:var(--paper);color:var(--sub);font-size:13px;font-weight:700;white-space:nowrap}
+.au{font-size:13px;color:var(--sub)}.q{font-family:'Noto Serif JP',serif;font-weight:700;line-height:1.6;word-break:auto-phrase;text-wrap:balance}
+.ini{flex:none;width:30px;height:30px;border-radius:999px;background:var(--red);color:#FFF8E7;font-family:'Noto Serif JP',serif;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.sec{font-family:'Noto Serif JP',serif;font-size:18px;font-weight:700;margin:0}.muted{font-size:14px;color:var(--sub)}
+.bot{display:flex;flex-wrap:wrap;gap:12px}
+@media(max-width:640px){.bot{flex-direction:column}.bot .ob{width:100%;justify-content:center}.cta{width:100%;justify-content:center}}
+.g{display:grid;grid-template-columns:7fr 5fr;gap:16px;align-items:start}.pn{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.pn .q{font-size:22px;margin:0}.rr{display:flex;flex-direction:column}.rr div{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.pn.go{background:var(--cream);border:2px solid var(--gold)}.bar{height:12px;border-radius:999px;background:#E8DCC4}
+@media(max-width:640px){.g{grid-template-columns:1fr}}
+.stl{display:inline-block;padding:3px 12px;border-radius:6px;border:2px solid var(--red);background:#FBE3E3;color:var(--red-dark);font-size:13px;font-weight:700}
+.cta.end{background:var(--red)}.warn2{font-size:13px;color:var(--sub)}
+.lh{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.sc2{height:440px;overflow-y:auto;border:1px solid var(--line);border-radius:14px;background:#EFE5D0;padding:12px;display:flex;flex-direction:column;gap:10px;scrollbar-color:#C9B99C #F1EADB}
+.sc2:focus-visible{outline:3px solid #1F2A44;outline-offset:2px}
+.sd{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.sh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}.sh b{font-size:15px}.sh .m{font-size:13px;color:var(--sub)}.sh .tg{margin-left:auto}
+.ok2{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:6px;background:#E9F3E6;border:1.5px solid #6E9A66;color:var(--ok);font-size:12px;font-weight:700}
+.no2{display:inline-flex;padding:2px 10px;border-radius:6px;border:1.5px dashed #8A7A68;background:var(--paper);color:var(--sub);font-size:12px;font-weight:700}
+.tx{margin:0;font-size:14px;line-height:1.8}.tx span{font-size:12px;font-weight:700;color:var(--red-dark);margin-right:8px}
+.fl{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:5px 14px;border-radius:999px;border:1px solid #C9A9A3;background:var(--paper);font-size:13px;font-weight:700;color:var(--red-dark)}.chip.on{background:var(--red);color:#fff;border-color:var(--red)}
+
+html,body{height:100%}body{display:flex;flex-direction:column;overflow:hidden}
+.main{flex:1;min-height:0;max-width:960px;width:100%;padding:16px 32px 18px;gap:14px}
+h1{margin:0;font-size:24px;align-self:flex-start}
+.top2{display:grid;grid-template-columns:7fr 5fr;gap:14px;align-items:stretch}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:flex;flex-direction:column;gap:6px}
+.card .q{font-size:19px;margin:0}.card .au{font-size:12px}
+.rc{display:flex;flex-wrap:wrap;gap:6px 8px;margin-top:2px}.rc span{display:inline-flex;align-items:center;gap:6px;padding:3px 12px 3px 4px;border:1px solid var(--line);border-radius:999px;background:var(--bg);font-size:13px}
+.rc .ini{width:22px;height:22px;font-size:11px}
+.card.go{background:var(--cream);border:2px solid var(--gold);gap:8px}.card.go h2{margin:0;font-family:'Noto Serif JP',serif;font-size:16px}
+.cta{min-height:44px;font-size:15px;justify-content:center}.warn2{font-size:12px}
+.lsec{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.lt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}.lt h2{margin:0;font-family:'Noto Serif JP',serif;font-size:17px}
+.lt .bar{flex:1;min-width:120px;max-width:260px;height:10px}
+.sc2{flex:1;min-height:0;height:auto}
+.empty{flex:1;display:flex;align-items:center;justify-content:center;border:1px dashed #C9B99C;border-radius:14px;color:var(--sub);font-size:15px}
+.bot{flex:none}.ob{min-height:40px}
+</style></head><body>
+<header class="nav"><div class="nl"><span class="logo">よみより</span><span class="badge">教師用</span><span class="ni cur" aria-current="page" style="margin-left:0">教材を選ぶ</span></div><div style="display:flex;align-items:center;gap:22px"><a class="top" href="#">トップに戻る</a><a href="#" style="font-size:14px;color:var(--sub);text-decoration:underline">ログアウト</a></div></header><main class="main"><h1>舞姫 の授業</h1><div class="top2"><section class="card"><span class="au">森 鷗外　全文</span><h2 class="q">豊太郎の行動を、あなたはどう思いますか？</h2><div class="rc"><span><i class="ini" aria-hidden="true" style="font-style:normal">豊</i>豊太郎の葛藤を重く見る読者</span><span><i class="ini" aria-hidden="true" style="font-style:normal">エ</i>エリスとの約束を重んじる読者</span><span><i class="ini" aria-hidden="true" style="font-style:normal">仕</i>仕事と生活の制約を読む読者</span></div></section><section class="card go"><h2>授業の状態</h2><span class="stl" style="align-self:flex-start">授業中</span><span class="muted" style="font-size:13px">生徒のトップに、この教材セットが表示されています。</span><a class="cta" href="#">生徒の感想を保存して授業終了</a><span class="warn2">まだ提出していない人が 4 人います。</span></section></div>
+<section class="lsec"><div class="lt"><h2>感想の提出状況</h2><span class="muted">提出 4 / 8 人</span><div class="bar" role="img" aria-label="4人が提出、4人が未提出"><i style="display:block;height:100%;width:50%;background:var(--red);border-radius:999px"></i></div></div>
+<div class="sc2" tabindex="0" role="region" aria-label="生徒ごとの提出状況"><article class="sd"><div class="sh"><b>ゲスト</b><span class="m">ロール：仕事と生活の制約を読む読者</span><span class="m">発言 0 回</span><span class="tg"><span class="no2">未提出</span></span></div><p class="tx"><span>対話前</span>トヨタ唐</p></article><article class="sd"><div class="sh"><b>ゲスト</b><span class="m">ロール：エリスとの約束を重んじる読者</span><span class="m">発言 0 回</span><span class="tg"><span class="no2">未提出</span></span></div><p class="tx"><span>対話前</span>豊太郎は仕事があるから仕方がない</p></article><article class="sd"><div class="sh"><b>ゲスト</b><span class="m">ロール：エリスとの約束を重んじる読者</span><span class="m">発言 0 回</span><span class="tg"><span class="no2">未提出</span></span></div><p class="tx"><span>対話前</span>豊太郎の決断は仕方がないと思う</p></article><article class="sd"><div class="sh"><b>ゲスト</b><span class="m">ロール：豊太郎の葛藤を重く見る読者</span><span class="m">発言 3 回</span><span class="tg"><span class="ok2"><span aria-hidden="true">✓</span>提出済み</span></span></div><p class="tx"><span>対話前</span>豊太郎は自分の出世のために、エリスを捨てたと思う。</p><p class="tx"><span>対話後</span>出世だけでなく、周りの期待に押された面もあったと思う。</p></article><article class="sd"><div class="sh"><b>上野 さくら</b><span class="m">ロール：エリスとの約束を重んじる読者</span><span class="m">発言 4 回</span><span class="tg"><span class="ok2"><span aria-hidden="true">✓</span>提出済み</span></span></div><p class="tx"><span>対話前</span>豊太郎は弱い人だと思う。エリスを置いて帰ったから。</p><p class="tx"><span>対話後</span>弱さだけではなく、約束と仕事の間で迷ったのだと思う。</p></article><article class="sd"><div class="sh"><b>岡田 健太</b><span class="m">ロール：仕事と生活の制約を読む読者</span><span class="m">発言 2 回</span><span class="tg"><span class="ok2"><span aria-hidden="true">✓</span>提出済み</span></span></div><p class="tx"><span>対話前</span>生活のために仕方なかったと思う。</p><p class="tx"><span>対話後</span>生活の事情があっても、約束を軽く扱ってよいとは言えないと思った。</p></article><article class="sd"><div class="sh"><b>佐藤 蓮</b><span class="m">ロール：豊太郎の葛藤を重く見る読者</span><span class="m">発言 3 回</span><span class="tg"><span class="ok2"><span aria-hidden="true">✓</span>提出済み</span></span></div><p class="tx"><span>対話前</span>豊太郎が悪いと思う。約束を破ったから。</p><p class="tx"><span>対話後</span>どちらが悪いかより、なぜそう選んだのかを考えたい。</p></article><article class="sd"><div class="sh"><b>鈴木 美咲</b><span class="m">ロール：エリスとの約束を重んじる読者</span><span class="m">発言 1 回</span><span class="tg"><span class="no2">未提出</span></span></div><p class="tx"><span>対話前</span>エリスがかわいそうだと思う。</p></article></div></section><div class="bot"><a class="ob" href="#">作成した教材セットに戻る</a><a class="ob" href="#">教材の実施状況</a></div></main></body></html>

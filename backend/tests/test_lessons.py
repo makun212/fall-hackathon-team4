@@ -68,17 +68,20 @@ class LessonTests(unittest.TestCase):
         self.assertIn("book-ms001", self.student.get("/student").text)
         self.assertEqual({"ms001"}, db.open_lesson_set_ids())
 
-    def test_start_from_material_shelf_opens_lesson_before_showing_chats(self):
+    def test_material_shelf_links_to_lesson_page(self):
+        # 教材セット選択・教材セット一覧からは開始せず、授業の画面へ進む（授業の開始・終了は、授業の画面だけで行う）
         for path in ["/teacher", "/teacher/material-sets"]:
             page = self.teacher.get(path)
-            self.assertIn(f'action="{LESSON}/start"', page.text)
-            self.assertIn('name="show_chats" value="true"', page.text)
             self.assertIn(f'href="{LESSON}"', page.text)
-        response = self.teacher.post(f"{LESSON}/start", data={"show_chats": "true"}, follow_redirects=False)
+            self.assertNotIn(f'action="{LESSON}/start"', page.text)
+        self.assertIn("授業前", self.teacher.get("/teacher/material-sets").text)
+        # 授業の画面から開始すると、同じ授業の画面に戻る
+        response = self.teacher.post(f"{LESSON}/start", follow_redirects=False)
         self.assertEqual(303, response.status_code)
-        self.assertEqual("/teacher/chats", response.headers["location"])
+        self.assertEqual(LESSON, response.headers["location"])
         self.assertIn("book-ms001", self.student.get("/student").text)
-        self.assertEqual(200, self.teacher.get(response.headers["location"]).status_code)
+        # 教材セット一覧の札も「授業中」に変わる
+        self.assertIn("授業中", self.teacher.get("/teacher/material-sets").text)
 
     def test_submissions_are_listed(self):
         self.teacher.post(f"{LESSON}/start")

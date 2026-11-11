@@ -1,0 +1,98 @@
+<!doctype html><html lang="ja"><head>
+<title>よみより｜教師用 教材セット詳細（案1 一覧スクロール 見た目の基準・静的HTML）</title>
+<!-- 「教材セット詳細」（旧「作成した教材セット」）の基準。タブレット横 1180×820 で 1 画面に収める。
+  - ヘッダー、題名、「全 ◯ 件」は固定。教材セットの並び（.listsc）だけがスクロールする。
+  - 状態の札（未実施／授業中／実施済み）は、バックエンドに状態がある場合だけ表示する。
+  - 「授業を開始する」は、未実施のときだけ表示する（今の仕様と違う場合は、今の仕様に合わせる）。-->
+<title>よみより｜教師用 感想の提出状況（案2 未提出と提出済みの2列 見た目の基準・静的HTML）</title>
+<!-- 教師用「感想の提出状況」の見た目の基準。
+  - 提出時刻（.tm）は、バックエンドに記録がある場合だけ表示する。無ければ .tm の要素ごと省く。
+  - 「感想を見る」のリンク先は、既存のものを使う（無ければ、ボタンごと省かず、止めて確認する）。
+  - 「要確認」の印は出さない。--><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+<style>
+:root{--red:#A61E22;--red-dark:#8E1B1F;--cream:#FBF1DC;--paper:#FFFDF8;--bg:#F7F0E3;--gold:#E4C26A;--ink:#2B2118;--sub:#5C4B3B;--line:#E5D9C3;--ok:#2E5A2A}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:'Noto Sans JP',sans-serif}a{text-decoration:none}
+.nav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;min-height:56px;padding:0 32px;background:var(--paper);border-bottom:2px solid var(--red)}
+.nl{display:flex;align-items:center;gap:12px;align-self:stretch}.logo{font-family:'Noto Serif JP',serif;font-weight:700;font-size:18px;letter-spacing:.08em}
+.badge{padding:2px 10px;border-radius:999px;background:#F8DADA;color:var(--red-dark);font-size:12px;font-weight:700}
+.ni{margin-left:8px;align-self:stretch;display:flex;align-items:center;font-size:14px;color:var(--sub)}.ni.cur{margin-left:0;border-bottom:3px solid var(--red);font-weight:700;color:var(--red-dark)}
+.top{min-height:40px;padding:0 18px;display:flex;align-items:center;border:1px solid #C9A9A3;border-radius:10px;background:var(--paper);font-size:14px;font-weight:700;color:var(--red-dark)}
+.main{max-width:960px;margin:0 auto;padding:26px 32px 36px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0 0 8px;display:table;padding-bottom:6px;border-bottom:3px solid var(--red);font-family:'Noto Serif JP',serif;font-size:26px}
+.mat{font-size:14px;color:var(--sub)}
+.tag{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap}
+.t-ok{background:#E9F3E6;border:1.5px solid #6E9A66;color:var(--ok)}.t-no{background:var(--paper);border:1.5px dashed #8A7A68;color:var(--sub)}.t-al{background:#FBE3E3;border:2px solid var(--red);color:var(--red-dark)}
+.ob{min-height:36px;padding:0 14px;display:inline-flex;align-items:center;border:1px solid #C9A9A3;border-radius:8px;background:var(--paper);font-size:13px;font-weight:700;color:var(--red-dark);white-space:nowrap}
+.bar{height:12px;border-radius:999px;background:#E8DCC4;overflow:hidden}.bar i{display:block;height:100%;background:var(--red)}
+.big{font-family:'Noto Serif JP',serif;font-weight:700}
+.note{font-size:12px;color:var(--sub)}
+@media(max-width:640px){.nav{padding:0 16px}.main{padding:20px 16px 28px}}
+.hero{display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px}.hero .big{font-size:30px}.hero .big small{font-size:15px;margin-left:4px}.hero .bar{flex:1;min-width:220px}
+.cols{display:grid;grid-template-columns:5fr 7fr;gap:16px;align-items:start}
+.pn{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px}.pn.warn{background:var(--cream);border:2px solid var(--gold)}
+.pn h2{margin:0 0 4px;font-family:'Noto Serif JP',serif;font-size:18px}.pn .note{display:block;margin-bottom:10px}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}li:first-child{border-top:0}li>span:first-child{flex:1;font-weight:700}.tm{font-size:13px;color:var(--sub)}
+.warn li{border-color:#E4D3AC}
+@media(max-width:640px){.cols{grid-template-columns:1fr}}
+.main{gap:20px}.ob{min-height:44px;padding:0 20px;font-size:15px}.cta{min-height:48px;padding:0 30px;border-radius:10px;background:var(--red);color:#fff;border-bottom:3px solid var(--gold);display:inline-flex;align-items:center;font-size:16px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
+.st{display:inline-block;padding:3px 12px;border-radius:6px;border:1.5px dashed #8A7A68;background:var(--paper);color:var(--sub);font-size:13px;font-weight:700;white-space:nowrap}
+.au{font-size:13px;color:var(--sub)}.q{font-family:'Noto Serif JP',serif;font-weight:700;line-height:1.6;word-break:auto-phrase;text-wrap:balance}
+.ini{flex:none;width:30px;height:30px;border-radius:999px;background:var(--red);color:#FFF8E7;font-family:'Noto Serif JP',serif;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.sec{font-family:'Noto Serif JP',serif;font-size:18px;font-weight:700;margin:0}.muted{font-size:14px;color:var(--sub)}
+.bot{display:flex;flex-wrap:wrap;gap:12px}
+@media(max-width:640px){.bot{flex-direction:column}.bot .ob{width:100%;justify-content:center}.cta{width:100%;justify-content:center}}
+.g{display:grid;grid-template-columns:7fr 5fr;gap:16px;align-items:start}.pn{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.pn .q{font-size:22px;margin:0}.rr{display:flex;flex-direction:column}.rr div{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.pn.go{background:var(--cream);border:2px solid var(--gold)}.bar{height:12px;border-radius:999px;background:#E8DCC4}
+@media(max-width:640px){.g{grid-template-columns:1fr}}
+.stl{display:inline-block;padding:3px 12px;border-radius:6px;border:2px solid var(--red);background:#FBE3E3;color:var(--red-dark);font-size:13px;font-weight:700}
+.cta.end{background:var(--red)}.warn2{font-size:13px;color:var(--sub)}
+.lh{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.sc2{height:440px;overflow-y:auto;border:1px solid var(--line);border-radius:14px;background:#EFE5D0;padding:12px;display:flex;flex-direction:column;gap:10px;scrollbar-color:#C9B99C #F1EADB}
+.sc2:focus-visible{outline:3px solid #1F2A44;outline-offset:2px}
+.sd{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.sh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}.sh b{font-size:15px}.sh .m{font-size:13px;color:var(--sub)}.sh .tg{margin-left:auto}
+.ok2{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:6px;background:#E9F3E6;border:1.5px solid #6E9A66;color:var(--ok);font-size:12px;font-weight:700}
+.no2{display:inline-flex;padding:2px 10px;border-radius:6px;border:1.5px dashed #8A7A68;background:var(--paper);color:var(--sub);font-size:12px;font-weight:700}
+.tx{margin:0;font-size:14px;line-height:1.8}.tx span{font-size:12px;font-weight:700;color:var(--red-dark);margin-right:8px}
+.fl{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:5px 14px;border-radius:999px;border:1px solid #C9A9A3;background:var(--paper);font-size:13px;font-weight:700;color:var(--red-dark)}.chip.on{background:var(--red);color:#fff;border-color:var(--red)}
+
+
+.main{max-width:960px;margin:0 auto;padding:22px 32px 36px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0;font-size:24px;align-self:flex-start}
+.top2{display:grid;grid-template-columns:7fr 5fr;gap:14px;align-items:stretch}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:flex;flex-direction:column;gap:6px}
+.card .q{font-size:19px;margin:0}.card .au{font-size:12px}
+.rc{display:flex;flex-wrap:wrap;gap:6px 8px;margin-top:2px}.rc span{display:inline-flex;align-items:center;gap:6px;padding:3px 12px 3px 4px;border:1px solid var(--line);border-radius:999px;background:var(--bg);font-size:13px}
+.rc .ini{width:22px;height:22px;font-size:11px}
+.card.go{background:var(--cream);border:2px solid var(--gold);gap:8px}.card.go h2{margin:0;font-family:'Noto Serif JP',serif;font-size:16px}
+.cta{min-height:44px;font-size:15px;justify-content:center}.warn2{font-size:12px}
+.lsec{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.lt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}.lt h2{margin:0;font-family:'Noto Serif JP',serif;font-size:17px}
+.lt .bar{flex:1;min-width:120px;max-width:260px;height:10px}
+.sc2{flex:1;min-height:0;height:auto}
+.empty{flex:1;display:flex;align-items:center;justify-content:center;border:1px dashed #C9B99C;border-radius:14px;color:var(--sub);font-size:15px}
+.bot{flex:none}.ob{min-height:40px}
+
+.hrow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}.cnt{font-size:14px;color:var(--sub)}.cnt b{color:var(--red-dark)}
+.stt{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap}
+.s-no{border:1.5px dashed #8A7A68;background:var(--paper);color:var(--sub)}.s-on{border:2px solid var(--red);background:#FBE3E3;color:var(--red-dark)}.s-ok{border:1.5px solid #6E9A66;background:#E9F3E6;color:var(--ok)}
+.date{font-size:13px;color:var(--sub);white-space:nowrap}.ttl{font-family:'Noto Serif JP',serif;font-size:20px;font-weight:700}.ttl small{font-size:14px;font-weight:400;color:var(--sub);margin-left:6px;font-family:'Noto Sans JP'}
+.pq{background:var(--cream);border-radius:10px;padding:10px 14px;font-size:15px;line-height:1.7}.pq span{display:block;font-size:12px;color:var(--sub);font-weight:700}
+.acts{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}.acts .ob,.acts .cta{min-height:42px;font-size:14px}.cta{padding:0 22px;border-radius:10px;background:var(--red);color:#fff;border-bottom:3px solid var(--gold);display:inline-flex;align-items:center;font-weight:700;white-space:nowrap}
+.rg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.rcd{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.rh{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px;line-height:1.5}.rcd ul{margin:0;padding-left:18px;font-size:13px;line-height:1.7;color:var(--sub);list-style:disc;display:block}.rcd li{display:list-item;border:0;padding:0;font-size:13px;font-weight:400}
+.ed{align-self:flex-start;padding:2px 8px;border-radius:6px;background:#EFE5D0;color:var(--sub);font-size:12px;font-weight:700;margin-top:auto}
+.set{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.sh1{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}.sh1 .date{margin-left:auto}
+@media(max-width:640px){.rg{grid-template-columns:1fr}.acts{justify-content:stretch}.acts>*{flex:1;justify-content:center}.main{padding:18px 16px 28px}}
+
+html,body{height:100%}body{display:flex;flex-direction:column;overflow:hidden}
+.main{flex:1;min-height:0;padding-bottom:0;gap:12px}
+.hrow{flex:none}
+.listsc{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:18px;padding:4px 6px 28px 0;margin-right:-6px;scrollbar-color:#C9B99C #F1EADB}
+.listsc:focus-visible{outline:3px solid #1F2A44;outline-offset:2px}
+.listsc .set{flex:none}
+</style></head><body>
+<header class="nav"><div class="nl"><span class="logo">よみより</span><span class="badge">教師用</span><span class="ni cur" aria-current="page" style="margin-left:0">教材を選ぶ</span></div><div style="display:flex;align-items:center;gap:22px"><a class="top" href="#">トップに戻る</a><a href="#" style="font-size:14px;color:var(--sub);text-decoration:underline">ログアウト</a></div></header><main class="main"><div class="hrow"><h1>教材セット詳細</h1><span class="cnt">全 <b>4</b> 件</span></div><div class="listsc" tabindex="0" role="region" aria-label="教材セットの一覧"><section class="set"><div class="sh1"><span class="ttl">舞姫<small>（全文）</small></span><span class="stt s-no">未実施</span><span class="date">作成日 2026年11月11日</span></div><div class="pq"><span>生徒への問いかけ</span>豊太郎の行動を、あなたはどう思いますか？</div><div><h2 class="sec" style="font-size:15px;margin:0 0 8px">ロール（3つ）</h2><div class="rg"><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">豊</span>豊太郎の葛藤を重く見る読者</div><ul><li>愛情と出世への思いの両方を見る</li><li>決断の難しさと心の弱さを区別する</li><li>現状を冷静に見つめている</li></ul><span class="ed">編集済み</span></div><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">エ</span>エリスとの約束を重んじる読者</div><ul><li>豊太郎の決断を、裏切りだと強く感じる</li><li>エリスが当時置かれた社会的立場への共感を重視する</li><li>エリスを狂気に追いやった責任を豊太郎自身に厳しく問う</li></ul><span class="ed">編集済み</span></div><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">自</span>自分で選ぶ責任を問う読者</div><ul><li>他人への同意も自分の選択と考える</li><li>事情の説明と責任の免除を分ける</li><li>断ることや相談する余地を探る</li></ul></div></div></div><div class="acts"><a class="ob" href="#">授業の状態・終了</a><a class="cta" href="#">授業を開始する</a></div></section><section class="set"><div class="sh1"><span class="ttl">舞姫<small>（全文）</small></span><span class="stt s-on">授業中</span><span class="date">作成日 2026年11月10日</span></div><div class="pq"><span>生徒への問いかけ</span>豊太郎の行動を、あなたはどう思いますか？</div><div><h2 class="sec" style="font-size:15px;margin:0 0 8px">ロール（3つ）</h2><div class="rg"><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">豊</span>豊太郎の葛藤を重く見る読者</div><ul><li>愛情と出世への思いの両方を見る</li><li>決断の難しさと心の弱さを区別する</li><li>現状を冷静に見つめている</li></ul><span class="ed">編集済み</span></div><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">エ</span>エリスとの約束を重んじる読者</div><ul><li>豊太郎の決断を、裏切りだと強く感じる</li><li>エリスが当時置かれた社会的立場への共感を重視する</li><li>エリスを狂気に追いやった責任を豊太郎自身に厳しく問う</li></ul><span class="ed">編集済み</span></div><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">自</span>自分で選ぶ責任を問う読者</div><ul><li>他人への同意も自分の選択と考える</li><li>事情の説明と責任の免除を分ける</li><li>断ることや相談する余地を探る</li></ul></div></div></div><div class="acts"><a class="ob" href="#">授業の状態・終了</a></div></section><section class="set"><div class="sh1"><span class="ttl">舞姫<small>（全文）</small></span><span class="stt s-ok"><span aria-hidden="true">✓</span>実施済み</span><span class="date">作成日 2026年11月9日</span></div><div class="pq"><span>生徒への問いかけ</span>豊太郎の行動を、あなたはどう思いますか？</div><div><h2 class="sec" style="font-size:15px;margin:0 0 8px">ロール（3つ）</h2><div class="rg"><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">豊</span>豊太郎の葛藤を重く見る読者</div><ul><li>愛情と出世への思いの両方を見る</li><li>決断の難しさと心の弱さを区別する</li><li>現状を冷静に見つめている</li></ul><span class="ed">編集済み</span></div><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">エ</span>エリスとの約束を重んじる読者</div><ul><li>豊太郎の決断を、裏切りだと強く感じる</li><li>エリスが当時置かれた社会的立場への共感を重視する</li><li>エリスを狂気に追いやった責任を豊太郎自身に厳しく問う</li></ul><span class="ed">編集済み</span></div><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">自</span>自分で選ぶ責任を問う読者</div><ul><li>他人への同意も自分の選択と考える</li><li>事情の説明と責任の免除を分ける</li><li>断ることや相談する余地を探る</li></ul></div></div></div><div class="acts"><a class="ob" href="#">授業の状態・終了</a></div></section><section class="set"><div class="sh1"><span class="ttl">舞姫<small>（全文）</small></span><span class="stt s-ok"><span aria-hidden="true">✓</span>実施済み</span><span class="date">作成日 2026年11月6日</span></div><div class="pq"><span>生徒への問いかけ</span>豊太郎の行動を、あなたはどう思いますか？</div><div><h2 class="sec" style="font-size:15px;margin:0 0 8px">ロール（3つ）</h2><div class="rg"><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">豊</span>豊太郎の葛藤を重く見る読者</div><ul><li>愛情と出世への思いの両方を見る</li><li>決断の難しさと心の弱さを区別する</li><li>現状を冷静に見つめている</li></ul><span class="ed">編集済み</span></div><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">エ</span>エリスとの約束を重んじる読者</div><ul><li>豊太郎の決断を、裏切りだと強く感じる</li><li>エリスが当時置かれた社会的立場への共感を重視する</li><li>エリスを狂気に追いやった責任を豊太郎自身に厳しく問う</li></ul><span class="ed">編集済み</span></div><div class="rcd"><div class="rh"><span class="ini" aria-hidden="true">自</span>自分で選ぶ責任を問う読者</div><ul><li>他人への同意も自分の選択と考える</li><li>事情の説明と責任の免除を分ける</li><li>断ることや相談する余地を探る</li></ul></div></div></div><div class="acts"><a class="ob" href="#">授業の状態・終了</a></div></section></div></main></body></html>
