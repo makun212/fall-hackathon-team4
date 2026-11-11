@@ -67,10 +67,10 @@ class SecurityAcceptanceTests(unittest.TestCase):
             self.assert_access_denied(anonymous.get("/teacher/chats", follow_redirects=False))
 
     def test_student_cannot_use_teacher_pages(self):
-        # 生徒は先生の画面を開けない（教師コードの画面へ回される）。POST は 403
+        # 生徒は先生の画面を開けない（先生用ログイン画面に「登録されていません」と出る）。POST は 403
         response = self.app.get("/teacher/chats", follow_redirects=False)
         self.assertEqual(303, response.status_code)
-        self.assertEqual("/teacher/code", response.headers["location"])
+        self.assertEqual("/teacher/login?error=not_teacher", response.headers["location"])
         response = self.app.post("/teacher/candidates/confirm", data={"material_id": "m001", "range_type": "all", "selected": ["r001"]}, follow_redirects=False)
         self.assertEqual(403, response.status_code)
         self.assertEqual([], db.read_material_sets())

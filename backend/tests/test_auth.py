@@ -1,4 +1,4 @@
-"""Googleログインと教師コード（#33）のテスト。本物の Google は使わない。backend フォルダで python -m unittest discover -s tests"""
+"""Googleログインと、Google アカウントによる先生の判定（#33）のテスト。本物の Google は使わない。backend フォルダで python -m unittest discover -s tests"""
 
 import sys
 import unittest
@@ -16,7 +16,6 @@ import auth  # noqa: E402
 import db  # noqa: E402
 import main  # noqa: E402
 from auth_helper import login  # noqa: E402
-from rate_limit import RateLimiter  # noqa: E402
 
 
 class FakeGoogle:
@@ -32,6 +31,7 @@ class FakeGoogle:
 
 
 GOOGLE_USER = {"sub": "12345", "email": "student@example.test", "email_verified": True, "name": "山田 太郎"}
+GOOGLE_TEACHER = {"sub": "999", "email": "Teacher@Example.test", "email_verified": True, "name": "鈴木 先生"}
 
 
 class AuthTests(unittest.TestCase):
@@ -39,8 +39,7 @@ class AuthTests(unittest.TestCase):
         db.use_engine(create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}))
         self.app = TestClient(main.app)
         for context in [
-            patch.object(auth, "code_limiter", RateLimiter(5, 600)),
-            patch.object(auth, "TEACHER_CODE", "correct-code"),
+            patch.object(auth, "TEACHER_EMAILS", {"teacher@example.test"}),
             patch.object(auth, "DEV_LOGIN", False),
         ]:
             context.start()
@@ -74,32 +73,36 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(200, self.app.get("/student").status_code)
         self.assertIn("ログアウト", self.app.get("/student").text)
 
-    def test_teacher_login_asks_for_code_until_correct(self):
-        response = self.google_login("teacher")
-        self.assertEqual("/teacher/code", response.headers["location"])
-        self.assertEqual("/teacher/code", self.app.get("/teacher", follow_redirects=False).headers["location"])
-        self.assertEqual(403, self.app.post("/teacher/code", data={"code": "wrong"}).status_code)
-        self.assertEqual("student", db.get_user("google:12345")["role"])
-        response = self.app.post("/teacher/code", data={"code": "correct-code"}, follow_redirects=False)
+    def test_registered_account_becomes_teacher(self):
+        # 大文字・小文字が違っても、登録したアドレスなら先生になる
+        response = self.google_login("teacher", GOOGLE_TEACHER)
         self.assertEqual("/teacher", response.headers["location"])
-        self.assertEqual("teacher", db.get_user("google:12345")["role"])
+        self.assertEqual("teacher", db.get_user("google:999")["role"])
         self.assertEqual(200, self.app.get("/teacher").status_code)
-        # 次からは、先生用から入るとそのまま先生のトップへ
-        self.app.get("/auth/logout")
-        self.assertEqual("/teacher", self.google_login("teacher").headers["location"])
+        # メールアドレスは保存しない（#36）
+        self.assertFalse(db.get_user("google:999")["email"])
 
-    def test_teacher_code_is_rate_limited(self):
-        self.google_login("teacher")
-        statuses = [self.app.post("/teacher/code", data={"code": "wrong"}).status_code for _ in range(6)]
-        self.assertEqual([403] * 5 + [429], statuses)
-        # 上限のあとは、正しいコードでも受け付けない
-        self.assertEqual(429, self.app.post("/teacher/code", data={"code": "correct-code"}).status_code)
-
-    def test_teacher_code_not_configured(self):
-        self.google_login("teacher")
-        with patch.object(auth, "TEACHER_CODE", ""):
-            self.assertEqual(503, self.app.post("/teacher/code", data={"code": ""}).status_code)
+    def test_unregistered_account_cannot_be_teacher(self):
+        response = self.google_login("teacher")
+        self.assertEqual(auth.NOT_TEACHER_PAGE, response.headers["location"])
         self.assertEqual("student", db.get_user("google:12345")["role"])
+        self.assertIn("先生として登録されていません", self.app.get(response.headers["location"]).text)
+        self.assertEqual(auth.NOT_TEACHER_PAGE, self.app.get("/teacher", follow_redirects=False).headers["location"])
+        # 生徒の画面は使える
+        self.assertEqual(200, self.app.get("/student").status_code)
+
+    def test_removed_account_goes_back_to_student(self):
+        self.google_login("teacher", GOOGLE_TEACHER)
+        with patch.object(auth, "TEACHER_EMAILS", set()):
+            self.google_login("teacher", GOOGLE_TEACHER)
+        self.assertEqual("student", db.get_user("google:999")["role"])
+
+    def test_star_makes_teacher_entry_teachers(self):
+        with patch.object(auth, "TEACHER_EMAILS", {"*"}):
+            self.assertEqual("/student", self.google_login("student").headers["location"])
+            self.assertEqual("student", db.get_user("google:12345")["role"])
+            self.assertEqual("/teacher", self.google_login("teacher").headers["location"])
+            self.assertEqual("teacher", db.get_user("google:12345")["role"])
 
     def test_unverified_email_is_rejected(self):
         response = self.google_login("student", {**GOOGLE_USER, "email_verified": False})
@@ -107,7 +110,7 @@ class AuthTests(unittest.TestCase):
         self.assertIsNone(db.get_user("google:12345"))
 
     def test_role_param_cannot_make_a_teacher(self):
-        # ?role=teacher で入っても、教師コードなしでは教師にならない
+        # ?role=teacher で入っても、登録されていないアカウントは先生にならない
         self.google_login("teacher")
         self.assertEqual(303, self.app.get("/teacher/chats", follow_redirects=False).status_code)
         self.assertEqual("student", db.get_user("google:12345")["role"])
@@ -131,8 +134,7 @@ class AuthTests(unittest.TestCase):
         with patch.object(auth, "DEV_LOGIN", True):
             self.assertIn("/auth/dev/login?role=teacher", self.app.get("/teacher/login").text)
             response = self.app.get("/auth/dev/login?role=teacher", follow_redirects=False)
-            self.assertEqual("/teacher/code", response.headers["location"])
-            self.app.post("/teacher/code", data={"code": "correct-code"})
+            self.assertEqual("/teacher", response.headers["location"])
             self.assertEqual(200, self.app.get("/teacher/chats").status_code)
 
     def test_teacher_sees_student_names(self):

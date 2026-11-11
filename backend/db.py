@@ -32,7 +32,7 @@ DEFAULT_DATABASE_URL = "sqlite:///" + str(Path(__file__).resolve().parent / "app
 metadata = MetaData()
 
 # ログインした人（#33）。id は "google:<GoogleのユーザーID>"。role は student か teacher
-# 教師になるには、教師コードを入力する（auth.py）。生徒が自分で role を変えることはできない
+# 先生になるのは、.env の TEACHER_EMAILS に書いた Google アカウントだけ（auth.py）。生徒が自分で role を変えることはできない
 users = Table(
     "users",
     metadata,
@@ -456,7 +456,7 @@ def get_user(user_id: str):
 
 
 def set_user_role(user_id: str, role: str):
-    # 教師コードが正しかったときに、teacher にする
+    # 先生の Google アカウントでログインしたときに teacher、リストから外れたら student にする（auth.py）
     with get_engine().begin() as conn:
         conn.execute(update(users).where(users.c.id == user_id).values(role=role))
 

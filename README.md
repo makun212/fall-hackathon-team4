@@ -87,11 +87,10 @@ uvicorn main:app --reload
 ```
 GEMINI_API_KEY=（Google AI Studio で作ったキー）
 DEV_LOGIN=1                    # Google の設定なしで試す開発用ログイン。本番では書かない
-TEACHER_CODE=（好きな合言葉）  # 先生として使うときに入力する
 ```
 
 http://127.0.0.1:8000 を開き、ログイン画面の「（開発用）Googleを使わずにログイン」から入ればOKです。
-先生として入るときは、教師コードの入力が出ます。教師が授業を開始すると、生徒のトップに教材セットが表示されます。
+開発用ログインでは、先生用から入るとそのまま先生になります。教師が授業を開始すると、生徒のトップに教材セットが表示されます。
 
 テストは `backend` で `python -m unittest discover -s tests` と `python -m unittest discover -s security_tests` で実行できます。
 
@@ -102,7 +101,7 @@ http://127.0.0.1:8000 を開き、ログイン画面の「（開発用）Google�
 リポジトリの直下にある `render.yaml` で、アプリ（Web サービス）と DB（Postgres）をまとめて作れます。
 
 1. Render にログインし、「New → Blueprint」からこのリポジトリを選ぶ
-2. 秘密の値（`GEMINI_API_KEY`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`TEACHER_CODE`）を画面で入力する
+2. 秘密の値（`GEMINI_API_KEY`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`）と、先生の Google アカウント（`TEACHER_EMAILS`）を画面で入力する
 3. できた URL（`https://〜.onrender.com`）の `/auth/google/callback` を、Google Cloud の OAuth クライアントの「承認済みのリダイレクト URI」に追加する
 4. Google Cloud の OAuth 同意画面を「本番環境」にする（審査員がログインできるように）
 

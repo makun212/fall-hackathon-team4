@@ -1,5 +1,4 @@
 import base64
-import hmac
 import json
 import os
 import secrets
@@ -7,23 +6,24 @@ from pathlib import Path
 
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from dotenv import load_dotenv
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from itsdangerous import TimestampSigner
 
 import db
-from rate_limit import RateLimiter
 
 # Googleログインと権限（#33）
 # - 先生も生徒も Google でログインする。初めての人は生徒として登録する
-# - 教師になるには、先生用のログインから入り、教師コード（.env の TEACHER_CODE）を1回入力する
+# - .env の TEACHER_EMAILS に書いた Google アカウントでログインすると、先生になる（生徒は先生になれない）
 # - /teacher 以下は教師だけ、生徒の画面と /chat はログインした人だけが使える（access_control）
 # - 会話は作った本人だけが見られる（main.py で conversation の student_id と照らし合わせる）
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID") or ""
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET") or ""
-TEACHER_CODE = os.getenv("TEACHER_CODE") or ""
+# 先生として使う Google アカウントのメールアドレス（カンマ区切り）。大文字・小文字は区別しない
+# 「*」と書くと、先生用のログインから入った人は全員先生になる（審査員のアドレスがわからない発表の日だけ使う）
+TEACHER_EMAILS = {e.strip().lower() for e in (os.getenv("TEACHER_EMAILS") or "").split(",") if e.strip()}
 # 開発用ログイン。Google の設定がなくても手元で動かせるようにする。本番では絶対に 1 にしない
 DEV_LOGIN = os.getenv("DEV_LOGIN") == "1"
 # セッション（ログイン状態）を署名する鍵。本番では必ず .env に長いランダムな文字列を書く
@@ -36,10 +36,8 @@ SESSION_MAX_AGE = 7 * 24 * 60 * 60
 
 LOGIN_PAGES = {"teacher": "/teacher/login", "student": "/student/login"}
 HOME_PAGES = {"teacher": "/teacher", "student": "/student"}
-TEACHER_CODE_PAGE = "/teacher/code"
-
-# 教師コードの総当たりを防ぐ。1人あたり10分に5回まで
-code_limiter = RateLimiter(5, 600)
+# 先生として登録されていない人が、先生の画面を開こうとしたときの戻り先
+NOT_TEACHER_PAGE = "/teacher/login?error=not_teacher"
 
 oauth = OAuth()
 if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
@@ -70,10 +68,22 @@ def start_session(request: Request, user):
     request.session["user_id"] = user["id"]
 
 
+def teacher_role_for(email: str, wanted_role: str):
+    # このアカウントの役割。"teacher"、"student"、None（今のまま）のどれかを返す
+    # メールアドレスは判定に使うだけで、保存しない（#36）
+    if email and email.lower() in TEACHER_EMAILS:
+        return "teacher"
+    if "*" in TEACHER_EMAILS:
+        # 全員先生にできる日は、先生用から入った人だけ先生にする。生徒用から入った人は今のまま
+        return "teacher" if wanted_role == "teacher" else None
+    # リストから外れたアカウントは、生徒に戻す
+    return "student"
+
+
 def after_login_url(user, wanted_role: str) -> str:
-    # 先生用から入った人は、教師でなければ教師コードの画面へ。それ以外は役割のトップへ
+    # 先生用から入ったのに先生でなければ、先生用のログイン画面に「登録されていません」と出す
     if wanted_role == "teacher":
-        return HOME_PAGES["teacher"] if is_teacher(user) else TEACHER_CODE_PAGE
+        return HOME_PAGES["teacher"] if is_teacher(user) else NOT_TEACHER_PAGE
     return HOME_PAGES["student"]
 
 
@@ -102,19 +112,25 @@ async def google_callback(request: Request):
     info = token.get("userinfo") or {}
     if not info.get("sub") or not info.get("email_verified"):
         return RedirectResponse(LOGIN_PAGES.get(wanted_role, "/"), status_code=303)
-    # 保存するのは、Google のユーザー ID と名前だけ（#36）。メールアドレスは使い道がないので保存しない
+    # 保存するのは、Google のユーザー ID と名前だけ（#36）。メールアドレスは先生かどうかの判定にだけ使う
     user = db.upsert_user(f"google:{info['sub']}", "", info.get("name") or "")
+    role = teacher_role_for(info.get("email") or "", wanted_role)
+    if role is not None and role != user["role"]:
+        db.set_user_role(user["id"], role)
+        user = db.get_user(user["id"])
     start_session(request, user)
     return RedirectResponse(after_login_url(user, wanted_role), status_code=303)
 
 
 @router.get("/auth/dev/login")
 def dev_login(request: Request, role: str = "student"):
-    # 開発用ログイン（DEV_LOGIN=1 のときだけ）。先生として入るときも、教師コードを通す
+    # 開発用ログイン（DEV_LOGIN=1 のときだけ）。先生用から入ると、そのまま開発用の先生になる
     if not DEV_LOGIN:
         return HTMLResponse("見つかりません", status_code=404)
     wanted_role = role if role in LOGIN_PAGES else "student"
     user = db.upsert_user(f"dev:{wanted_role}", "", "開発用の" + ("先生" if wanted_role == "teacher" else "生徒"))
+    db.set_user_role(user["id"], wanted_role)
+    user = db.get_user(user["id"])
     start_session(request, user)
     return RedirectResponse(after_login_url(user, wanted_role), status_code=303)
 
@@ -123,40 +139,6 @@ def dev_login(request: Request, role: str = "student"):
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/", status_code=303)
-
-
-# ---- 教師コード ----
-
-
-def teacher_code_page(request: Request, error: str = "", status_code: int = 200):
-    from main import templates  # main.py が auth.py を読み込むので、ここで読む
-
-    return templates.TemplateResponse(
-        request, "teacher_code.html", {"error": error, "enabled": bool(TEACHER_CODE)}, status_code=status_code
-    )
-
-
-@router.get("/teacher/code", response_class=HTMLResponse)
-def teacher_code(request: Request):
-    user = current_user(request)
-    if is_teacher(user):
-        return RedirectResponse(HOME_PAGES["teacher"], status_code=303)
-    return teacher_code_page(request)
-
-
-@router.post("/teacher/code", response_class=HTMLResponse)
-def teacher_code_submit(request: Request, code: str = Form("")):
-    user = current_user(request)
-    if is_teacher(user):
-        return RedirectResponse(HOME_PAGES["teacher"], status_code=303)
-    if not TEACHER_CODE:
-        return teacher_code_page(request, "教師コードが設定されていません。管理者に連絡してください。", 503)
-    if not code_limiter.allow(user["id"]):
-        return teacher_code_page(request, "入力が多すぎます。10分ほど待ってから、もう一度入力してください。", 429)
-    if not hmac.compare_digest(code.strip().encode(), TEACHER_CODE.encode()):
-        return teacher_code_page(request, "教師コードが違います。", 403)
-    db.set_user_role(user["id"], "teacher")
-    return RedirectResponse(HOME_PAGES["teacher"], status_code=303)
 
 
 # ---- 権限の確認（すべてのリクエストの前に通る） ----
@@ -170,8 +152,6 @@ def needs(path: str):
     # このページに必要な権限。None（誰でも）、"login"（ログインした人）、"teacher"（教師だけ）
     if path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
         return None
-    if path == TEACHER_CODE_PAGE:
-        return "login"
     if path == "/teacher" or path.startswith("/teacher/"):
         return "teacher"
     return "login"
@@ -194,7 +174,7 @@ async def access_control(request: Request, call_next):
         return deny(request, LOGIN_PAGES["teacher" if is_teacher_page else "student"])
     if is_teacher_page and not is_teacher(user):
         if request.method == "GET":
-            return RedirectResponse(TEACHER_CODE_PAGE, status_code=303)
+            return RedirectResponse(NOT_TEACHER_PAGE, status_code=303)
         return JSONResponse({"detail": "教師だけが使えます"}, status_code=403)
     request.state.user = user
     return await call_next(request)

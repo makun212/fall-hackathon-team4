@@ -28,6 +28,11 @@
     <h1 class="m-0 self-start pb-1.5 border-b-3 border-crimson font-['Noto_Serif_JP',serif] text-[28px] max-sm:text-2xl font-bold leading-snug">{{ heading }}</h1>
     <p class="m-0 text-[15px] leading-[1.8]">Googleアカウントでログインしてください。</p>
 
+    {# 先生として登録されていないアカウントで、先生用から入ろうとしたとき（error は main.py から渡す） #}
+    {% if error %}
+      <p role="alert" class="m-0 px-4 py-3 bg-rose-soft border border-crimson rounded-[10px] text-[15px] leading-[1.7] text-crimson-dark">{{ error }}</p>
+    {% endif %}
+
     {# 本番の実装時に、Googleの公式のボタンに差し替える #}
     {# ロゴは装飾なので aria-hidden。ボタンの名前は文字で決まる #}
     <a href="{{ login_url }}" class="flex items-center justify-center gap-3 min-h-14 px-5 bg-cream-paper border-2 border-crimson rounded-[10px] text-[17px] font-bold tracking-[0.04em] text-crimson-dark transition-transform duration-150 ease-in-out hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">

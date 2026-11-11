@@ -24,7 +24,8 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      - key: TEACHER_CODE
+      # 先生として使う Google アカウント（カンマ区切り）。発表の日は「*」にすると、先生用から入った人は全員先生
+      - key: TEACHER_EMAILS
         sync: false
       # ログイン状態を署名する鍵。Render がランダムな値を作る
       - key: SESSION_SECRET

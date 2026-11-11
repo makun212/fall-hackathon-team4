@@ -883,6 +883,10 @@ def render_login(request: Request, role: str):
             "login_url": f"{GOOGLE_LOGIN_URL}?role={role}",
             # 開発用ログイン（.env の DEV_LOGIN=1 のときだけ出す）
             "dev_login_url": f"/auth/dev/login?role={role}" if auth.DEV_LOGIN else None,
+            # 先生として登録されていないアカウントで、先生用から入ろうとしたとき（auth.py）
+            "error": "このGoogleアカウントは、先生として登録されていません。登録したアカウントでログインし直すか、生徒用からログインしてください。"
+            if role == "teacher" and request.query_params.get("error") == "not_teacher"
+            else None,
         },
     )
 
