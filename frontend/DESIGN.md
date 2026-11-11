@@ -44,7 +44,7 @@
 | `btn_secondary(label, href=None)` | 補助のボタン（白い背景、赤い枠） | `{{ btn_secondary("トップに戻る", href="/") }}` |
 | `card(title, href=None)` | 選択用のカード。中身は `call` で渡す | 下の例を見る |
 | `radio_card(name, value, required=False)` | ラジオボタンで1つ選ぶカード（フォームの中で使う）。中身は `call` で渡す | `{% call radio_card("role_id", "r001", required=True) %}…{% endcall %}` |
-| `avatar(text, image=None)` | ロールの丸いアイコン。`text` は名前の最初の1文字など。画像があれば上に重ねる | `{{ avatar(role_name[:1], role_image) }}` |
+| `avatar(text)` | ロールの丸いアイコン。`text` は名前の最初の1文字。画像は使わない | `{{ avatar(role_name[:1]) }}` |
 | `badge(text, kind)` | 小さなラベル。kind は `default` / `accent` / `warning` | `{{ badge("注意", "warning") }}` |
 
 カードの例：
@@ -89,7 +89,7 @@ CSSファイルは作らないルールは、教師用の画面でも同じで�
 - 色：教師用の画面と同じ `crimson`、`kinari`、`cream`、`gold` など。チャットの「送信」の書く前の色（`#D9CDB8`・`#C9B99C`）と入力欄の placeholder（`#7A6A58`）だけは、基準HTMLの値を直書きしている
 - 文字：Google Fonts の Noto Sans JP（本文）／Noto Serif JP（題名・見出し）を、その画面の `head` ブロックで読み込む
 - ボタン：部品を使わず、画面に合わせて class で書く（高さ48px以上は守る）。「送信」などの見た目の切り替えは `:placeholder-shown` と `group-has-*` だけで行い、JS の `disabled` は使わない
-- チャットの発言1件は `_components.html` の `chat_msg(kind, who, text, avatar_text=None, image=None)`、頭文字の丸は `chat_avatar(text, image=None)` で出す。htmx で追加される `_message.html` もこれを使う
+- チャットの発言1件は `_components.html` の `chat_msg(kind, who, text, avatar_text=None)`、頭文字の丸は `chat_avatar(text)` で出す。htmx で追加される `_message.html` もこれを使う
 
 ## ウェルカム画面の例外
 

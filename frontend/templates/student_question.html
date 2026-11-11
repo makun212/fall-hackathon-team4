@@ -8,7 +8,6 @@
 {% set role_id = role["id"] %}
 {% set role_name = role["name"] %}
 {% set role_summary = role["summary"] %}
-{% set role_image = role["image"] %}
 
 {# 問いは、いまは main.py の get_question() の固定の文。将来は教師の入力や AI の生成に変わるため、長さが変わっても崩れないようにする #}
 {# 60字を超えたら文字を小さくする #}
@@ -53,12 +52,9 @@
 
   {# 話す相手のロール #}
   <div class="flex items-start gap-3.5 px-[18px] py-4 bg-cream-paper border border-cream-line rounded-xl">
-    {# 頭文字の丸。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+    {# 頭文字の丸。画像は使わない #}
     <span class="relative flex-none flex items-center justify-center size-11 overflow-hidden rounded-full bg-crimson font-['Noto_Serif_JP',serif] text-lg font-bold text-kinari" aria-hidden="true">
       {{ role_name[:1] }}
-      {% if role_image %}
-        <img src="/static/{{ role_image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">
-      {% endif %}
     </span>
     <div class="flex flex-col gap-1 min-w-0">
       <span class="text-xs font-bold tracking-[0.08em] text-crimson-dark">話す相手</span>

@@ -103,10 +103,9 @@
       <section aria-label="AIが作った案" class="w-full lg:w-[330px] lg:flex-none min-w-0 flex flex-col gap-3.5 px-[22px] py-5 bg-kinari border border-dashed border-[#C9B99C] rounded-xl">
         <span class="text-[13px] font-bold tracking-[0.08em] text-sepia-muted">AIが作った案（変わりません）</span>
         <div class="flex items-center gap-3 min-w-0">
-          {# 頭文字の丸（飾り）。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+          {# 頭文字の丸（飾り）。画像は使わない #}
           <span class="relative flex-none flex items-center justify-center size-[38px] overflow-hidden rounded-full bg-crimson font-serif text-base font-bold text-kinari" aria-hidden="true">
             {{ original.name[:1] }}
-            {% if candidate.image %}<img src="/static/{{ candidate.image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">{% endif %}
           </span>
           <span class="min-w-0 font-serif font-bold leading-normal [word-break:auto-phrase] text-balance [overflow-wrap:anywhere]">{{ original.name }}</span>
         </div>
