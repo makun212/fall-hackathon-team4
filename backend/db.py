@@ -269,6 +269,7 @@ def read_chat_records():
             {
                 "id": f"db{m.id}",
                 "conversation_id": m.conversation_id,
+                "role": m.role,
                 "text": m.content,
                 "sent_at": to_jst_text(m.created_at),
             }

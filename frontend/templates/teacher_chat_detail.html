@@ -1,13 +1,123 @@
-{# 教師用：チャット閲覧画面（仮）。conversation は main.py の find_conversation_summary() から渡す #}
-{# 次のissue「チャット閲覧画面と検知結果の表示」で、この画面を本物に置き換える #}
+{# 教師用：生徒のチャット閲覧画面（見た目の基準は「D1 額縁で見る」）。main.py の teacher_chat_detail() から渡す #}
+{# conversation：find_conversation_summary() の要約（生徒名・ロール名・発言数・最終時刻・会話全体の検知） #}
+{# material_title / role_summary / messages：get_conversation_detail() の値。messages は古い順で、is_student・text・detections を持つ #}
+{# 額縁の中は、生徒のチャット画面（index.html）と同じ見た目を閲覧専用で出す。入力欄・送信・「対話を終えて、感想を書く」は出さない #}
+{# 吹き出しは生徒の画面と同じ _components.html の chat_msg を使う #}
+{# 前の生徒／次の生徒は、移動先のデータがないので出していない #}
 {% extends "teacher_base.html" %}
 {% set nav_current = "chats" %}
-{% from "_components.html" import page_header, btn_secondary %}
+{% from "_components.html" import chat_avatar, chat_msg %}
 
-{% block title %}{{ conversation.student_name }}さんの会話 | {% endblock %}
+{# 会話の要約のキー名を参照するのはここだけ。項目が変わったらここを直す #}
+{% set student_name = conversation.student_name %}
+{% set role_name = conversation.role_name %}
+{% set detections = conversation.detections %}
+{% set is_urgent = conversation.max_level == "high" %}
+{% set message_count = conversation.message_count %}
+{% set last_sent_at = conversation.last_sent_at %}
+{% set role_initial = role_name[:1] if role_name else "AI" %}
+
+{# 一覧に戻るリンク先。URLを変えるときはここだけ直す #}
+{% set list_url = "/teacher/chats" %}
+
+{% set focus_cls = "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink" %}
+{% set btn_cls = "inline-flex items-center justify-center min-h-11 px-[22px] border border-rose-line rounded-[10px] bg-cream-paper text-[15px] font-bold text-crimson-dark whitespace-nowrap hover:bg-kinari " ~ focus_cls %}
+
+{% block title %}{{ student_name }}さんの会話 | {% endblock %}
+{% block body_class %}bg-cream text-sepia{% endblock %}
+
+{% block head %}
+{# 書体：本文は Noto Sans JP、見出しは Noto Serif JP（生徒のチャット画面と同じ） #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{# Tailwind の class で書けない部分（検知ラベルの形）だけをここにまとめる。一覧（teacher_chats.html）の .ls-tag と同じ形 #}
+<style>
+  .vw-tag{display:inline-block;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;line-height:1.6;white-space:nowrap}
+  .vw-tag--alert{border:2px solid var(--color-crimson);background:var(--color-crimson);color:#fff}
+  .vw-tag--high{border:2px solid var(--color-crimson);background:#FBE3E3;color:var(--color-crimson-dark)}
+  .vw-tag--medium{border:1.5px solid #B8661B;background:#FFF1E0;color:#8A4A10}
+  .vw-tag--low{border:1.5px dashed #8A7A68;background:var(--color-cream-paper);color:var(--color-sepia-muted)}
+</style>
+{% endblock %}
 
 {% block content %}
-{{ page_header(conversation.student_name ~ "さんの会話（ロール: " ~ conversation.role_name ~ "）") }}
-<p class="mb-8 text-muted">閲覧画面は準備中です</p>
-{{ btn_secondary("一覧に戻る", href="/teacher/chats") }}
+{# 幅は最大920px（左右の余白32pxを含む）。640px未満は、左右の余白を16pxにする #}
+<div class="max-sm:-mx-4 max-w-[856px] mx-auto flex flex-col gap-4 font-['Noto_Sans_JP',sans-serif] text-base leading-normal text-sepia">
+
+  {# タイトル行：h1 と教材名。右に「一覧に戻る」。ロール名は額縁の中にだけ出す #}
+  <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2.5">
+    <div class="min-w-0">
+      <h1 class="inline-block m-0 mb-2 pb-1.5 border-b-3 border-crimson font-['Noto_Serif_JP',serif] text-[26px] font-bold leading-normal [overflow-wrap:anywhere]">{{ student_name }}さんの会話</h1>
+      {% if material_title %}
+        <span class="block text-sm text-sepia-muted">{{ material_title }}</span>
+      {% endif %}
+    </div>
+    <a href="{{ list_url }}" class="{{ btn_cls }} max-sm:w-full">一覧に戻る</a>
+  </div>
+
+  {# 要約の帯：検知があるときだけ、左に赤い線とタグを出す #}
+  <div class="flex flex-wrap items-center gap-x-[22px] gap-y-2.5 px-[18px] py-3 bg-cream-paper border border-cream-line border-l-5 {{ 'border-l-crimson' if detections else 'border-l-transparent' }} rounded-[10px] text-sm">
+    {% if detections %}
+      <span class="flex flex-wrap gap-1.5">
+        {% if is_urgent %}<span class="vw-tag vw-tag--alert">！要確認</span>{% endif %}
+        {% for d in detections %}
+          <span class="vw-tag vw-tag--{{ d.level if d.level in ['high', 'medium', 'low'] else 'low' }}">{{ d.type_label }}（{{ d.level_label }}）</span>
+        {% endfor %}
+      </span>
+    {% else %}
+      <span class="text-sepia-muted">検知なし</span>
+    {% endif %}
+    {% if message_count is not none %}
+      <span class="text-sepia-muted">発言 <b class="text-sepia tabular-nums">{{ message_count }}</b> 件</span>
+    {% endif %}
+    {% if last_sent_at %}
+      <span class="text-sepia-muted">最終 <b class="text-sepia tabular-nums">{{ last_sent_at }}</b></span>
+    {% endif %}
+  </div>
+
+  {# 額縁：生徒に表示された画面を、閲覧専用で入れる #}
+  <section class="px-3.5 pt-3 pb-3.5 bg-[#E8DCC4] border-2 border-gold rounded-2xl" aria-label="生徒に表示された画面（閲覧のみ）">
+    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1 pb-2.5">
+      <span class="inline-flex items-center gap-2 text-[13px] font-bold text-sepia-muted">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+        生徒に表示された画面
+      </span>
+      <span class="text-xs text-sepia-muted">閲覧のみ。入力はできません</span>
+    </div>
+
+    <div class="bg-cream-paper rounded-xl overflow-hidden shadow-[0_6px_14px_rgba(90,58,30,.16)]">
+      <div class="p-4 max-sm:p-2.5 bg-cream flex flex-col gap-3">
+        {# 相手の表示（生徒のチャット画面と同じ形。「と対話中」と終了ボタンは出さない） #}
+        <div class="flex items-center gap-3 pb-3 border-b border-cream-line">
+          {{ chat_avatar(role_initial) }}
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <span class="font-['Noto_Serif_JP',serif] text-base font-bold leading-normal [overflow-wrap:anywhere]">{{ role_name }}</span>
+            {% if role_summary %}
+              <span class="text-[13px] leading-[1.6] text-sepia-muted [overflow-wrap:anywhere]">{{ role_summary }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        {# 会話の欄。高さは固定（640px以下は画面の56%）で、中だけスクロールする。キーボードでもスクロールできるよう tabindex を付けている #}
+        <div tabindex="0" role="log" aria-label="対話の記録"
+             class="h-[360px] max-sm:h-[56vh] max-sm:min-h-[300px] overflow-y-auto [scrollbar-color:#C9B99C_#F1EADB] p-[18px] max-sm:p-3 flex flex-col gap-[18px] bg-cream-paper border border-cream-line rounded-xl {{ focus_cls }}">
+          {% for m in messages %}
+            {% if m.is_student %}
+              {% call chat_msg("me", "生徒", m.text, flagged=m.detections | length > 0) %}
+                {% for d in m.detections %}
+                  <span class="flex items-center gap-1.5 text-xs font-bold text-crimson-dark"><span aria-hidden="true">▲</span>検知：{{ d.type_label }}（{{ d.level_label }}）</span>
+                {% endfor %}
+              {% endcall %}
+            {% else %}
+              {{ chat_msg("ai", role_name, m.text, role_initial) }}
+            {% endif %}
+          {% else %}
+            <p class="m-auto text-center text-sm text-sepia-muted">まだ発言がありません</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
 {% endblock %}
