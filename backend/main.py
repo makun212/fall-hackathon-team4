@@ -236,6 +236,7 @@ def read_chat_records():
     from_db = db.read_chat_records()
     records["conversations"] += from_db["conversations"]
     records["messages"] += from_db["messages"]
+    records["detections"] += from_db["detections"]
     # ログインした人の名前（#33）。ログイン機能より前に作られた会話は「ゲスト」と出す
     records["user_names"].update(db.read_user_names())
     records["user_names"][None] = "ゲスト"

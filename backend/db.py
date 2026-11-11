@@ -75,6 +75,18 @@ chat_messages = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+# 生徒の発言で見つかった乱暴な言葉の検知（#21）。moderation.detect() の結果をそのまま保存する
+# 送信を止めたり、発言を書き換えたりはしない。教師が確認する順番の目安にだけ使う
+detections = Table(
+    "detections",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("message_id", Integer, ForeignKey("chat_messages.id"), nullable=False, index=True),
+    Column("type", String(32), nullable=False),
+    Column("level", String(16), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 # 教師がロールの編集画面で保存した内容（#13）。name が None なら「元に戻した」
 role_edits = Table(
     "role_edits",
@@ -243,19 +255,22 @@ def save_messages(conversation_id: str, role_id: str, messages):
         exists = conn.execute(select(conversations.c.id).where(conversations.c.id == conversation_id)).first()
         if exists is None:
             conn.execute(insert(conversations).values(id=conversation_id, role_id=role_id, created_at=created))
-        conn.execute(
-            insert(chat_messages),
-            [
-                {
-                    "conversation_id": conversation_id,
-                    "role": m["role"],
-                    "content": m["content"],
-                    "evidence": m.get("evidence"),
-                    "created_at": created,
-                }
-                for m in messages
-            ],
-        )
+        for m in messages:
+            result = conn.execute(
+                insert(chat_messages).values(
+                    conversation_id=conversation_id,
+                    role=m["role"],
+                    content=m["content"],
+                    evidence=m.get("evidence"),
+                    created_at=created,
+                )
+            )
+            # 発言に検知の結果があれば、一緒に保存する（#21）
+            message_id = result.inserted_primary_key[0]
+            for d in m.get("detections") or []:
+                conn.execute(
+                    insert(detections).values(message_id=message_id, type=d["type"], level=d["level"], created_at=created)
+                )
 
 
 # ---- 教師用：チャット一覧（#20） ----
@@ -276,6 +291,7 @@ def read_chat_records():
     with get_engine().connect() as conn:
         conversation_rows = conn.execute(select(conversations).order_by(conversations.c.created_at)).all()
         message_rows = conn.execute(select(chat_messages).order_by(chat_messages.c.id)).all()
+        detection_rows = conn.execute(select(detections).order_by(detections.c.id)).all()
     return {
         "conversations": [
             {
@@ -296,6 +312,7 @@ def read_chat_records():
             }
             for m in message_rows
         ],
+        "detections": [{"message_id": f"db{d.message_id}", "type": d.type, "level": d.level} for d in detection_rows],
     }
 
 
