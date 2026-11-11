@@ -11,6 +11,11 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 # 使うモデル。.env の GEMINI_MODEL で変えられる（本番で別のモデルにするときも、ここか .env だけ直す）
 DEFAULT_MODEL = "gemini-3.6-flash"
+# 予備のモデル。使うモデルが混み合っている（503）・回数の上限（429）・サーバーの失敗（500）のときに、1回だけこちらでやり直す
+# 無料枠の回数の上限はモデルごとなので、予備に逃がすと、発表で同時に使える量も増える
+# .env の GEMINI_FALLBACK_MODEL で変えられる。空（GEMINI_FALLBACK_MODEL=）にすると、やり直さない
+DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash-lite"
+RETRY_CODES = {429, 500, 503}
 
 # 1回の呼び出しで待つ最大の時間（秒）。これを超えたら AIError にする
 # チャット画面は30秒で待つのをやめるので、それより短くして、先にエラーを返せるようにする
@@ -66,6 +71,25 @@ def to_contents(messages):
     return contents
 
 
+def models_to_try():
+    # 使う順のモデル名のリスト
+    main_model = os.getenv("GEMINI_MODEL") or DEFAULT_MODEL
+    fallback = os.getenv("GEMINI_FALLBACK_MODEL")
+    fallback = DEFAULT_FALLBACK_MODEL if fallback is None else fallback
+    return [main_model] + ([fallback] if fallback and fallback != main_model else [])
+
+
+def generate_with_fallback(contents, config):
+    # 1つ目のモデルが混み合っているなどのときだけ、予備のモデルでやり直す。それ以外の失敗はそのまま返す
+    models = models_to_try()
+    for i, model in enumerate(models):
+        try:
+            return get_client().models.generate_content(model=model, contents=contents, config=config)
+        except errors.APIError as e:
+            if e.code not in RETRY_CODES or i == len(models) - 1:
+                raise
+
+
 def call_gemini(system_prompt: str, messages, config_extra=None):
     # 呼び出しの本体。失敗はすべて AIError にそろえる（生徒の入力やAPIキーはエラー文に入れない）
     config = types.GenerateContentConfig(
@@ -75,11 +99,7 @@ def call_gemini(system_prompt: str, messages, config_extra=None):
         **(config_extra or {}),
     )
     try:
-        response = get_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL") or DEFAULT_MODEL,
-            contents=to_contents(messages),
-            config=config,
-        )
+        response = generate_with_fallback(to_contents(messages), config)
     except errors.APIError as e:
         if e.code == 429:
             raise AIBusyError("AIが混み合っています。少し待ってから、もう一度送ってください。") from e

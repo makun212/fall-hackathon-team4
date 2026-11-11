@@ -137,11 +137,13 @@ class ConversationScopeTests(unittest.TestCase):
         self.choose()
         self.models.error = True
         self.assertEqual(502, self.send().status_code)
+        # 失敗したときは予備のモデルでも1回やり直すので、ここまでの呼び出しの回数を覚えておく（ai.py）
+        calls_after_failure = len(self.models.prompts)
         self.assertEqual("ms001", db.get_conversation(self.conversation_id)["material_set_id"])
         self.assertEqual([], db.read_messages(self.conversation_id, 20))
         self.app.cookies.delete("material_set")
         self.assertEqual(400, self.send().status_code)
-        self.assertEqual(1, len(self.models.prompts))
+        self.assertEqual(calls_after_failure, len(self.models.prompts))
 
     def test_chat_page_with_mismatched_cookie_is_rejected(self):
         self.start()
