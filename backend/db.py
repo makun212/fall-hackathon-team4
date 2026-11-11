@@ -37,7 +37,7 @@ users = Table(
     "users",
     metadata,
     Column("id", String(128), primary_key=True),
-    Column("email", Text),
+    Column("email", Text),  # 個人情報を減らすため、今は保存しない（#36）。前のデータとの互換のために列だけ残す
     Column("name", Text),
     Column("role", String(16), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),

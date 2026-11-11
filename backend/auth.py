@@ -102,7 +102,8 @@ async def google_callback(request: Request):
     info = token.get("userinfo") or {}
     if not info.get("sub") or not info.get("email_verified"):
         return RedirectResponse(LOGIN_PAGES.get(wanted_role, "/"), status_code=303)
-    user = db.upsert_user(f"google:{info['sub']}", info.get("email") or "", info.get("name") or "")
+    # 保存するのは、Google のユーザー ID と名前だけ（#36）。メールアドレスは使い道がないので保存しない
+    user = db.upsert_user(f"google:{info['sub']}", "", info.get("name") or "")
     start_session(request, user)
     return RedirectResponse(after_login_url(user, wanted_role), status_code=303)
 
