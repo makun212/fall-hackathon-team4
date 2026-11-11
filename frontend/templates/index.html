@@ -157,7 +157,8 @@
       chat.append(msg);
       pending = msg;
     });
-    form.addEventListener("htmx:beforeSwap", (e) => {
+    // htmx:beforeSwap は、フォームではなく差し込み先（#chat）で起きる。#chat はフォームの外なので、#chat で待つ
+    chat.addEventListener("htmx:beforeSwap", (e) => {
       if (e.detail.shouldSwap && pending) {
         pending.remove();
         pending = null;
