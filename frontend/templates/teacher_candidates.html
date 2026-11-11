@@ -4,8 +4,8 @@
 {# select_max: 選ぶロールの数（main.py の ROLE_SELECT_MAX）。チームの決定で、ちょうどこの数を選ぶ（送信時のチェックはバックエンドで対応予定） #}
 {% extends "teacher_base.html" %}
 {% set nav_current = "materials" %}
-{# 教材の制作中は、生徒のチャット一覧へは行かない #}
-{% set hide_nav = ["chats"] %}
+{# 教材の制作中は、生徒のチャット一覧・感想の提出状況へは行かない #}
+{% set hide_nav = ["chats", "submissions"] %}
 
 {# 移動先・送信先は、ここだけで定義する #}
 {% set confirm_url = "/teacher/candidates/confirm" %}
