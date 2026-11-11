@@ -14,7 +14,8 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 import ai  # noqa: E402
 import chat  # noqa: E402
 import db  # noqa: E402
-import main  # noqa: E402
+import main  # noqa: E402
+from auth_helper import login  # noqa: E402
 from rate_limit import RateLimiter  # noqa: E402
 
 
@@ -52,6 +53,7 @@ class ChatRateLimitTests(unittest.TestCase):
         chat.conversation_limiter = RateLimiter(2, 60)
         chat.global_limiter = RateLimiter(3, 60)
         self.app = TestClient(main.app)
+        login(self.app)
 
     def tearDown(self):
         ai._client = None

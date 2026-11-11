@@ -30,8 +30,10 @@
 {# 上部バー：base.html のヘッダーと同じ中身で、背景を紙の白、下線を深紅にする #}
 {% block header %}
 <header class="bg-cream-paper border-b-2 border-crimson text-sepia">
-  <div class="max-w-6xl mx-auto px-8">
+  <div class="max-w-6xl mx-auto px-8 flex items-center justify-between gap-4">
     <a href="/" class="inline-flex items-center min-h-14 font-serif text-xl font-bold tracking-[0.08em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">よみより</a>
+    {# ログアウト（#33） #}
+    <a href="/auth/logout" class="my-1 inline-flex items-center min-h-12 px-2 text-base text-sepia-muted underline hover:text-crimson-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">ログアウト</a>
   </div>
 </header>
 {% endblock %}

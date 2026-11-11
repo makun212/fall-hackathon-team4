@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -20,6 +21,7 @@ import chat
 import db
 import main
 from rate_limit import RateLimiter
+from auth_helper import TEST_USER_ID, login
 
 
 class FakeModels:
@@ -45,6 +47,8 @@ class SecurityAcceptanceTests(unittest.TestCase):
             item.start()
             self.addCleanup(item.stop)
         self.app = TestClient(main.app)
+        # 本人のブラウザ。生徒としてログインしておく（#33）
+        login(self.app, role="student")
         self.addCleanup(self.app.close)
         self.addCleanup(self.engine.dispose)
         self.conversation_id = "a" * 32
@@ -59,7 +63,28 @@ class SecurityAcceptanceTests(unittest.TestCase):
             self.assertIn(response.status_code, {401, 403})
 
     def test_anonymous_teacher_page_is_denied(self):
-        self.assert_access_denied(self.app.get("/teacher/chats", follow_redirects=False))
+        with TestClient(main.app) as anonymous:
+            self.assert_access_denied(anonymous.get("/teacher/chats", follow_redirects=False))
+
+    def test_student_cannot_use_teacher_pages(self):
+        # 生徒は先生の画面を開けない（教師コードの画面へ回される）。POST は 403
+        response = self.app.get("/teacher/chats", follow_redirects=False)
+        self.assertEqual(303, response.status_code)
+        self.assertEqual("/teacher/code", response.headers["location"])
+        response = self.app.post("/teacher/candidates/confirm", data={"material_id": "m001", "range_type": "all", "selected": ["r001"]}, follow_redirects=False)
+        self.assertEqual(403, response.status_code)
+        self.assertEqual([], db.read_material_sets())
+
+    def test_another_logged_in_student_cannot_read_or_continue(self):
+        db.create_conversation(self.conversation_id, "r002", "PRIVATE_OPINION_TEST_ONLY", student_id=TEST_USER_ID)
+        with TestClient(main.app) as other:
+            login(other, role="student", user_id="test:other")
+            page = other.get(f"/student/reflection?role_id=r002&conversation_id={self.conversation_id}")
+            self.assertNotIn("PRIVATE_OPINION_TEST_ONLY", page.text)
+            other.post("/student/reflection", data={"role_id": "r002", "conversation_id": self.conversation_id, "reflection": "UNAUTHORIZED_WRITE"})
+            self.assertEqual(403, self.send("横取り", other).status_code)
+        self.assertIsNone(db.get_conversation(self.conversation_id)["reflection"])
+        self.assertEqual([], self.models.calls)
 
     def test_another_browser_cannot_read_private_pre_opinion(self):
         db.create_conversation(self.conversation_id, "r002", "PRIVATE_OPINION_TEST_ONLY")
@@ -81,6 +106,8 @@ class SecurityAcceptanceTests(unittest.TestCase):
         self.conversation_id = re.search(r"conversation_id=([0-9a-f]{32})", response.headers["location"]).group(1)
         self.assertEqual("ms001", db.get_conversation(self.conversation_id)["material_set_id"])
         with TestClient(main.app) as different_context:
+            # 同じ生徒が、教材セットの Cookie を持たない別のブラウザから送る
+            login(different_context, role="student")
             # Cookieなしでは全文になる。同じIDを使って範囲を広げられないことが必要。
             response = self.send("続きの質問", different_context)
         self.assertEqual(400, response.status_code)
@@ -95,6 +122,7 @@ class SecurityAcceptanceTests(unittest.TestCase):
         self.assertEqual(2, response.text.count("&lt;img"))
 
     def test_teacher_role_edit_html_is_escaped(self):
+        login(self.app, role="teacher")
         payload = '<svg/onload=alert()>'
         response = self.app.post("/teacher/candidates/r001/edit", data={"material_id": "m001", "range_type": "paragraph", "start": "1", "end": "3", "name": payload, "feature_1": "特徴1", "feature_2": "特徴2", "feature_3": "特徴3"}, follow_redirects=False)
         self.assertEqual(303, response.status_code)

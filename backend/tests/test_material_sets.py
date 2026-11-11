@@ -11,7 +11,8 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import db  # noqa: E402
-import main  # noqa: E402
+import main  # noqa: E402
+from auth_helper import login  # noqa: E402
 
 RANGE = {"material_id": "m001", "range_type": "paragraph", "start": "3", "end": "10"}
 
@@ -20,6 +21,7 @@ class MaterialSetTests(unittest.TestCase):
     def setUp(self):
         db.use_engine(create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}))
         self.app = TestClient(main.app)
+        login(self.app)
 
     def edit(self, candidate_id, name, features):
         data = {**RANGE, "name": name, "feature_1": features[0], "feature_2": features[1], "feature_3": features[2]}

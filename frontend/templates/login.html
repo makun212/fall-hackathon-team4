@@ -35,8 +35,10 @@
       Googleアカウントでログイン
     </a>
 
-    {# ログインの実装が完了したら、このリンクを削除する。文字は小さいが、押せる高さは44px確保する #}
-    <a href="{{ home_url }}" class="self-center inline-flex items-center min-h-11 px-1 text-[13px] text-sepia-muted underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">（開発用）ログインせずに進む</a>
+    {# 開発用ログイン。.env の DEV_LOGIN=1 のときだけ main.py が dev_login_url を渡す。文字は小さいが、押せる高さは44px確保する #}
+    {% if dev_login_url %}
+    <a href="{{ dev_login_url }}" class="self-center inline-flex items-center min-h-11 px-1 text-[13px] text-sepia-muted underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">（開発用）Googleを使わずにログイン</a>
+    {% endif %}
 
     <div class="flex flex-col items-start gap-2.5 pt-[18px] border-t border-cream-line">
       <p class="m-0 text-[13px] leading-[1.7] text-sepia-muted">先生・生徒を選び直す場合は戻ってください</p>

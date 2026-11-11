@@ -29,6 +29,18 @@ DEFAULT_DATABASE_URL = "sqlite:///" + str(Path(__file__).resolve().parent / "app
 
 metadata = MetaData()
 
+# ログインした人（#33）。id は "google:<GoogleのユーザーID>"。role は student か teacher
+# 教師になるには、教師コードを入力する（auth.py）。生徒が自分で role を変えることはできない
+users = Table(
+    "users",
+    metadata,
+    Column("id", String(128), primary_key=True),
+    Column("email", Text),
+    Column("name", Text),
+    Column("role", String(16), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 # 会話1つ分。生徒がチャット画面を開くたびに1件できる
 conversations = Table(
     "conversations",
@@ -132,8 +144,10 @@ def use_engine(engine):
 # ---- 会話（#20）と、対話前の考え・感想（#46） ----
 
 
-def create_conversation(conversation_id: str, role_id: str, pre_opinion: str, material_set_id: str | None = None):
-    # 対話前の考えを送ったときに、会話を1件作る
+def create_conversation(
+    conversation_id: str, role_id: str, pre_opinion: str, material_set_id: str | None = None, student_id: str | None = None
+):
+    # 対話前の考えを送ったときに、会話を1件作る。student_id は会話の持ち主（ログインした人の id）
     with get_engine().begin() as conn:
         conn.execute(
             insert(conversations).values(
@@ -141,6 +155,7 @@ def create_conversation(conversation_id: str, role_id: str, pre_opinion: str, ma
                 role_id=role_id,
                 pre_opinion=pre_opinion,
                 material_set_id=material_set_id,
+                student_id=student_id,
                 created_at=now(),
             )
         )
@@ -161,11 +176,14 @@ def has_conversation_context(conversation_id: str) -> bool:
         ).first() is not None
 
 
-def bind_conversation_context(conversation_id: str, role_id: str, material_set_id: str | None) -> bool:
+def bind_conversation_context(
+    conversation_id: str, role_id: str, material_set_id: str | None, student_id: str | None = None
+) -> bool:
     # 初回の直接POSTでも、AIを呼ぶ前に会話のロールと教材セットをDBに固定する。
     # 既存の会話を書き換えず、同じ文脈の要求だけを許す。固定記録のあるNoneだけが全文を表す。
+    # 持ち主（student_id）も一致しなければ False（ほかの人の会話には書き込ませない。#33）
     def matches(row):
-        return row["role_id"] == role_id and row["material_set_id"] == material_set_id
+        return row["role_id"] == role_id and row["material_set_id"] == material_set_id and row["student_id"] == student_id
 
     try:
         with get_engine().begin() as conn:
@@ -177,7 +195,11 @@ def bind_conversation_context(conversation_id: str, role_id: str, material_set_i
                 return scope_known and matches(row)
             conn.execute(
                 insert(conversations).values(
-                    id=conversation_id, role_id=role_id, material_set_id=material_set_id, created_at=now()
+                    id=conversation_id,
+                    role_id=role_id,
+                    material_set_id=material_set_id,
+                    student_id=student_id,
+                    created_at=now(),
                 )
             )
             conn.execute(insert(conversation_contexts).values(conversation_id=conversation_id))
@@ -356,3 +378,36 @@ def read_material_sets():
         {**dict(row._mapping), "created_at": to_jst_text(row.created_at), "roles": roles_by_set.get(row.id, [])}
         for row in set_rows
     ]
+
+
+# ---- ログインした人（#33） ----
+
+
+def upsert_user(user_id: str, email: str, name: str):
+    # ログインのたびに呼ぶ。初めての人は生徒として作る。名前とメールは最新にする（role は変えない）
+    with get_engine().begin() as conn:
+        exists = conn.execute(select(users.c.id).where(users.c.id == user_id)).first()
+        if exists is None:
+            conn.execute(insert(users).values(id=user_id, email=email, name=name, role="student", created_at=now()))
+        else:
+            conn.execute(update(users).where(users.c.id == user_id).values(email=email, name=name))
+    return get_user(user_id)
+
+
+def get_user(user_id: str):
+    # ユーザー1人を辞書で返す。なければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(select(users).where(users.c.id == user_id)).first()
+    return dict(row._mapping) if row else None
+
+
+def set_user_role(user_id: str, role: str):
+    # 教師コードが正しかったときに、teacher にする
+    with get_engine().begin() as conn:
+        conn.execute(update(users).where(users.c.id == user_id).values(role=role))
+
+
+def read_user_names():
+    # {ユーザーの id: 名前}。教師のチャット一覧で、生徒の名前を出すのに使う
+    with get_engine().connect() as conn:
+        return {r.id: r.name or r.email or "名前なし" for r in conn.execute(select(users.c.id, users.c.name, users.c.email))}
