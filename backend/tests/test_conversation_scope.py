@@ -18,7 +18,8 @@ from sqlalchemy.pool import StaticPool
 import ai
 import chat
 import db
-import main
+import main
+from auth_helper import TEST_USER_ID, login  # noqa: E402
 from rate_limit import RateLimiter
 
 
@@ -46,10 +47,13 @@ class ConversationScopeTests(unittest.TestCase):
             context.start()
             self.addCleanup(context.stop)
         self.app = TestClient(main.app)
+        login(self.app)
         self.addCleanup(self.app.close)
         self.conversation_id = "b" * 32
 
     def choose(self, material_set_id="ms001"):
+        # 生徒が教材セットを選べるのは、授業が開始中のときだけ（#43）
+        db.start_lesson(material_set_id)
         self.assertEqual(200, self.app.get(f"/student/roles?set={material_set_id}").status_code)
 
     def start(self):
@@ -61,6 +65,11 @@ class ConversationScopeTests(unittest.TestCase):
     def send(self, **extra):
         return self.app.post("/chat", data={"message": "質問", "role_id": "r002", "conversation_id": self.conversation_id, **extra})
 
+    def own_legacy_conversation(self):
+        # 旧会話は持ち主（student_id）がない。範囲の確認を試すため、ログインしているテスト用のユーザーの会話にする（#33）
+        with self.engine.begin() as conn:
+            conn.execute(update(db.conversations).where(db.conversations.c.id == self.conversation_id).values(student_id=TEST_USER_ID))
+
     def assert_rejected_without_api_or_messages(self):
         self.assertEqual(400, self.send().status_code)
         self.assertEqual([], self.models.prompts)
@@ -68,7 +77,7 @@ class ConversationScopeTests(unittest.TestCase):
 
     def test_removed_cookie_cannot_expand_saved_range(self):
         self.start()
-        self.app.cookies.clear()
+        self.app.cookies.delete("material_set")
         self.assert_rejected_without_api_or_messages()
         saved = db.get_conversation(self.conversation_id)
         self.assertEqual("ms001", saved["material_set_id"])
@@ -91,7 +100,7 @@ class ConversationScopeTests(unittest.TestCase):
         self.assertIn("エリスを狂気に追いやった責任を豊太郎自身に厳しく問う", prompt)
 
     def test_full_text_context_cannot_switch_to_a_set(self):
-        db.create_conversation(self.conversation_id, "r002", "考え")
+        db.create_conversation(self.conversation_id, "r002", "考え", student_id=TEST_USER_ID)
         self.choose()
         self.assert_rejected_without_api_or_messages()
         self.assertIsNone(db.get_conversation(self.conversation_id)["material_set_id"])
@@ -102,7 +111,7 @@ class ConversationScopeTests(unittest.TestCase):
         self.assertIsNone(db.get_conversation(self.conversation_id))
 
     def test_missing_saved_set_does_not_fall_back_to_full_text(self):
-        db.create_conversation(self.conversation_id, "r002", "考え", "missing")
+        db.create_conversation(self.conversation_id, "r002", "考え", "missing", student_id=TEST_USER_ID)
         self.app.cookies.set(main.MATERIAL_SET_COOKIE, "missing")
         self.assert_rejected_without_api_or_messages()
 
@@ -112,14 +121,14 @@ class ConversationScopeTests(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.conversation_id = re.search(r'name="conversation_id" value="([0-9a-f]{32})"', response.text).group(1)
         self.assertEqual("ms001", db.get_conversation(self.conversation_id)["material_set_id"])
-        self.app.cookies.clear()
+        self.app.cookies.delete("material_set")
         self.assert_rejected_without_api_or_messages()
 
     def test_direct_post_binds_context_before_first_reply(self):
         self.choose()
         self.assertEqual(200, self.send().status_code)
         self.assertEqual("ms001", db.get_conversation(self.conversation_id)["material_set_id"])
-        self.app.cookies.clear()
+        self.app.cookies.delete("material_set")
         self.assertEqual(400, self.send().status_code)
         self.assertEqual(1, len(self.models.prompts))
         self.assertEqual(2, len(db.read_messages(self.conversation_id, 20)))
@@ -128,15 +137,17 @@ class ConversationScopeTests(unittest.TestCase):
         self.choose()
         self.models.error = True
         self.assertEqual(502, self.send().status_code)
+        # 失敗したときは予備のモデルでも1回やり直すので、ここまでの呼び出しの回数を覚えておく（ai.py）
+        calls_after_failure = len(self.models.prompts)
         self.assertEqual("ms001", db.get_conversation(self.conversation_id)["material_set_id"])
         self.assertEqual([], db.read_messages(self.conversation_id, 20))
-        self.app.cookies.clear()
+        self.app.cookies.delete("material_set")
         self.assertEqual(400, self.send().status_code)
-        self.assertEqual(1, len(self.models.prompts))
+        self.assertEqual(calls_after_failure, len(self.models.prompts))
 
     def test_chat_page_with_mismatched_cookie_is_rejected(self):
         self.start()
-        self.app.cookies.clear()
+        self.app.cookies.delete("material_set")
         response = self.app.get(f"/student/chat?role_id=r002&conversation_id={self.conversation_id}")
         self.assertEqual(400, response.status_code)
 
@@ -147,11 +158,11 @@ class ConversationScopeTests(unittest.TestCase):
         self.assertEqual([], db.read_chat_records()["conversations"])
 
     def test_db_binding_never_changes_existing_role_set_or_opinion(self):
-        db.create_conversation(self.conversation_id, "r002", "元の考え", "ms001")
+        db.create_conversation(self.conversation_id, "r002", "元の考え", "ms001", student_id=TEST_USER_ID)
         original = db.get_conversation(self.conversation_id)
-        self.assertFalse(db.bind_conversation_context(self.conversation_id, "r002", None))
-        self.assertFalse(db.bind_conversation_context(self.conversation_id, "r003", "ms001"))
-        self.assertTrue(db.bind_conversation_context(self.conversation_id, "r002", "ms001"))
+        self.assertFalse(db.bind_conversation_context(self.conversation_id, "r002", None, TEST_USER_ID))
+        self.assertFalse(db.bind_conversation_context(self.conversation_id, "r003", "ms001", TEST_USER_ID))
+        self.assertTrue(db.bind_conversation_context(self.conversation_id, "r002", "ms001", TEST_USER_ID))
         self.assertEqual(original, db.get_conversation(self.conversation_id))
 
     def test_db_binding_conflict_is_rejected_before_api(self):
@@ -161,15 +172,17 @@ class ConversationScopeTests(unittest.TestCase):
     def test_legacy_null_scope_is_not_assumed_to_mean_full_text(self):
         # 旧save_messagesの直接作成はセットID・固定記録がない。既存の発言を消さず拒否する。
         db.save_messages(self.conversation_id, "r002", [{"role": "user", "content": "旧会話の発言"}])
+        self.own_legacy_conversation()
         original = db.read_messages(self.conversation_id, 20)
         self.assertFalse(db.has_conversation_context(self.conversation_id))
         self.assertEqual(400, self.send().status_code)
         self.assertEqual([], self.models.prompts)
         self.assertEqual(original, db.read_messages(self.conversation_id, 20))
-        self.assertFalse(db.bind_conversation_context(self.conversation_id, "r002", None))
+        self.assertFalse(db.bind_conversation_context(self.conversation_id, "r002", None, TEST_USER_ID))
 
     def test_legacy_conversation_with_saved_set_can_continue(self):
         db.save_messages(self.conversation_id, "r002", [{"role": "user", "content": "旧会話の発言"}])
+        self.own_legacy_conversation()
         with self.engine.begin() as conn:
             conn.execute(update(db.conversations).where(db.conversations.c.id == self.conversation_id).values(material_set_id="ms001"))
         self.assertFalse(db.has_conversation_context(self.conversation_id))
@@ -188,8 +201,8 @@ class ConversationScopeTests(unittest.TestCase):
             db.use_engine(engine)  # アプリと同じcreate_allで不足テーブルだけを追加。
             self.assertEqual("旧データ", db.get_conversation(self.conversation_id)["pre_opinion"])
             self.assertFalse(db.has_conversation_context(self.conversation_id))
-            self.assertFalse(db.bind_conversation_context(self.conversation_id, "r002", None))
-            db.create_conversation("c" * 32, "r002", "新しい会話")
+            self.assertFalse(db.bind_conversation_context(self.conversation_id, "r002", None, TEST_USER_ID))
+            db.create_conversation("c" * 32, "r002", "新しい会話", student_id=TEST_USER_ID)
             self.assertTrue(db.has_conversation_context("c" * 32))
         finally:
             engine.dispose()
@@ -204,7 +217,7 @@ class ConversationScopeTests(unittest.TestCase):
 
             def bind(material_set_id):
                 barrier.wait(timeout=10)
-                return material_set_id, db.bind_conversation_context(self.conversation_id, "r002", material_set_id)
+                return material_set_id, db.bind_conversation_context(self.conversation_id, "r002", material_set_id, TEST_USER_ID)
 
             try:
                 with ThreadPoolExecutor(max_workers=2) as executor:

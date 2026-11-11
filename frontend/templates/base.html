@@ -70,8 +70,12 @@
   {# 教師用の画面は teacher_base.html で、このヘッダーを差し替える #}
   {% block header %}
   <header class="bg-paper border-b-2 border-accent">
-    <div class="max-w-6xl mx-auto px-8">
+    <div class="max-w-6xl mx-auto px-8 flex items-center justify-between gap-4">
       <a href="/" class="inline-flex items-center min-h-14 text-2xl font-bold">{{ app_name }}</a>
+      {# ログイン中だけ出す（#33） #}
+      {% if "session" in request.scope and request.session.get("user_id") %}
+        <a href="/auth/logout" class="inline-flex items-center min-h-11 px-2 text-base text-muted underline">ログアウト</a>
+      {% endif %}
     </div>
   </header>
   {% endblock %}

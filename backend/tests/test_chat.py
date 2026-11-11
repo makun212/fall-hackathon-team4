@@ -16,7 +16,8 @@ from google.genai import errors  # noqa: E402
 import ai  # noqa: E402
 import chat  # noqa: E402
 import db  # noqa: E402
-import main  # noqa: E402
+import main  # noqa: E402
+from auth_helper import login  # noqa: E402
 from rate_limit import RateLimiter  # noqa: E402
 
 
@@ -53,6 +54,7 @@ class ChatTests(unittest.TestCase):
         self.client = FakeClient()
         ai._client = self.client
         self.app = TestClient(main.app)
+        login(self.app)
         page = self.app.get("/student/chat?role_id=r002").text
         self.conversation_id = re.search(r'name="conversation_id" value="([0-9a-f]{32})"', page).group(1)
 

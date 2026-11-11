@@ -12,7 +12,8 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import db  # noqa: E402
-import main  # noqa: E402
+import main  # noqa: E402
+from auth_helper import login  # noqa: E402
 
 CONVERSATION_IN_URL = re.compile(r"conversation_id=([0-9a-f]{32})")
 
@@ -21,6 +22,7 @@ class OpinionTests(unittest.TestCase):
     def setUp(self):
         db.use_engine(create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}))
         self.app = TestClient(main.app)
+        login(self.app)
 
     def start(self, opinion="豊太郎は弱い人だと思う"):
         # 問いかけ画面から送って、チャット画面へのリダイレクト先から会話 ID を取り出す

@@ -78,13 +78,38 @@ cd backend
 python -m venv .venv
 source .venv/Scripts/activate   # Macは source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # .env にAPIキーを書く
+cp .env.example .env            # .env にAPIキーなどを書く（下を参照）
 uvicorn main:app --reload
 ```
 
-http://localhost:8000 を開いて、メッセージを送るとダミーの返事が表示されればOK
+`backend/.env` には、最低限つぎを書きます（値はチャットや Discord に貼らない）。
+
+```
+GEMINI_API_KEY=（Google AI Studio で作ったキー）
+DEV_LOGIN=1                    # Google の設定なしで試す開発用ログイン。本番では書かない
+```
+
+http://127.0.0.1:8000 を開き、ログイン画面の「（開発用）Googleを使わずにログイン」から入ればOKです。
+開発用ログインでは、先生用から入るとそのまま先生になります。教師が授業を開始すると、生徒のトップに教材セットが表示されます。
+
+テストは `backend` で `python -m unittest discover -s tests` と `python -m unittest discover -s security_tests` で実行できます。
 
 ターミナルを開き直したときは、毎回 `source .venv/Scripts/activate` を実行してから作業してください。
+
+## デプロイ（Render）
+
+リポジトリの直下にある `render.yaml` で、アプリ（Web サービス）と DB（Postgres）をまとめて作れます。
+
+1. Render にログインし、「New → Blueprint」からこのリポジトリを選ぶ
+2. 秘密の値（`GEMINI_API_KEY`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`）と、先生の Google アカウント（`TEACHER_EMAILS`）を画面で入力する
+3. できた URL（`https://〜.onrender.com`）の `/auth/google/callback` を、Google Cloud の OAuth クライアントの「承認済みのリダイレクト URI」に追加する
+4. Google Cloud の OAuth 同意画面を「本番環境」にする（審査員がログインできるように）
+
+注意
+
+- 無料プランのアプリは、15分使われないと止まり、次に開いたときに起動まで1分ほどかかります。発表の前に一度開いておきます。
+- 無料プランの Postgres は30日で期限が切れます（発表までは十分です）。
+- DB は Postgres なので、再デプロイしてもデータは残ります。
 
 ## 開発ルール
 

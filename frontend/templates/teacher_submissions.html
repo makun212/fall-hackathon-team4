@@ -1,0 +1,228 @@
+{# 教師用：感想の提出状況（見た目の基準は「案2 未提出と提出済みの2列」）。main.py の teacher_submissions() から渡す #}
+{# material_set_title：教材名。submitted / not_submitted：get_submission_status() の値（会話を始めた生徒。会話1件＝1人） #}
+{# submitted の各値は student_name・conversation_id・submitted_at（「10:32」の形。記録がなければ None）。not_submitted は student_name・conversation_id #}
+{# submitted にはさらに pre_opinion（最初の感想）・reflection（最後の感想）・material_title（教材名）がある。ポップアップ「感想を見る」で使う #}
+{# ポップアップは <dialog> を1つだけ置き、各行のボタンの data-* から中身を差し替える（新しい通信はしない）。「要確認」の印は出さない #}
+{% extends "teacher_base.html" %}
+{% set nav_current = "submissions" %}
+
+{% set submitted_count = submitted | length %}
+{% set not_submitted_count = not_submitted | length %}
+{% set total_count = submitted_count + not_submitted_count %}
+{# 提出が早い順に並んでいるのは、時刻の記録があるときだけ。1件でもあれば補足文を出す #}
+{% set has_time = submitted | selectattr("submitted_at") | list | length > 0 %}
+
+{# ポップアップの「対話の前」「対話のあと」などの言葉。授業での呼び方に合わせるときはここだけ直す #}
+{% set label_pre = "最初の感想" %}
+{% set label_pre_sub = "対話の前" %}
+{% set label_post = "最後の感想" %}
+{% set label_post_sub = "対話のあと" %}
+{% set label_empty = "まだ入力されていません。" %}
+
+{# 「会話を見る」の移動先（生徒のチャット閲覧画面）。URLを変えるときはここだけ直す #}
+{% macro chat_url(s) %}/teacher/chats/{{ s.conversation_id }}{% endmacro %}
+
+{% set focus_cls = "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink" %}
+{# 枠線ボタン（感想を見る・前の人・会話を見る・次の人・×） #}
+{% set ob_cls = "inline-flex items-center justify-center min-h-9 px-3.5 border border-rose-line rounded-lg bg-cream-paper text-[13px] font-bold text-crimson-dark whitespace-nowrap cursor-pointer hover:bg-kinari " ~ focus_cls %}
+
+{% block title %}感想の提出状況 | {% endblock %}
+{% block body_class %}bg-cream text-sepia{% endblock %}
+
+{% block head %}
+{# 書体：本文は Noto Sans JP、見出しと数字は Noto Serif JP（チャット閲覧画面と同じ） #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{# Tailwind の class で書けない部分（状態の印の形）だけをここにまとめる。チャット一覧の .ls-tag と同じ形 #}
+<style>
+  .sb-tag{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;line-height:1.6;white-space:nowrap}
+  .sb-tag--no{border:1.5px dashed #8A7A68;background:var(--color-cream-paper);color:var(--color-sepia-muted)}
+  /* 一覧が長いときは、パネルの中でスクロールする（見出しと補足文は固定）。高さはチャット一覧の枠とそろえる */
+  .sb-scroll{max-height:470px;overflow-y:auto;overscroll-behavior:contain;margin-right:-8px;padding-right:8px;scrollbar-color:#C9B99C transparent}
+  @media (max-width:640px){.sb-scroll{max-height:50vh}}
+  /* ポップアップ「感想を見る」。動き（フェードなど）は付けない */
+  .sb-dlg{width:min(760px,calc(100% - 32px));max-width:none;max-height:90vh;overflow-y:auto;margin:auto;padding:22px 24px 20px;background:var(--color-cream-paper);border:2px solid var(--color-gold);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,.3);color:var(--color-sepia)}
+  .sb-dlg::backdrop{background:rgba(43,33,24,.55)}
+  @media (max-width:640px){.sb-dlg{padding:18px 16px 16px}}
+  /* 開いている間は、後ろの画面をスクロールさせない */
+  html:has(.sb-dlg[open]){overflow:hidden}
+  .sb-text{margin:6px 0 0;font-size:15px;line-height:1.9;white-space:pre-wrap;overflow-wrap:anywhere}
+  .sb-text.is-empty{color:#7A6A58}
+</style>
+{% endblock %}
+
+{% block content %}
+{# 幅は最大960px（左右の余白32pxを含む）。640px未満は、左右の余白を16pxにする #}
+<div class="max-sm:-mx-4 max-w-[896px] mx-auto flex flex-col gap-[18px] font-['Noto_Sans_JP',sans-serif] text-base leading-normal text-sepia">
+
+  {# タイトル行 #}
+  <div class="min-w-0">
+    <h1 class="inline-block m-0 mb-2 pb-1.5 border-b-3 border-crimson font-['Noto_Serif_JP',serif] text-[26px] font-bold leading-normal">感想の提出状況</h1>
+    {% if material_set_title %}
+      <span class="block text-sm text-sepia-muted [overflow-wrap:anywhere]">{{ material_set_title }}</span>
+    {% endif %}
+  </div>
+
+  {% if total_count == 0 %}
+    <p class="px-4 py-8 border border-cream-line rounded-[14px] bg-cream-paper text-center text-sepia-muted">この教材では、まだ生徒の記録がありません。</p>
+  {% else %}
+    {# 提出人数の行：数字は文字でも見せ、棒は補助 #}
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2.5">
+      <div class="font-['Noto_Serif_JP',serif] font-bold text-[30px] tabular-nums">{{ submitted_count }}<small class="ml-1 text-[15px]"> / {{ total_count }} 人が提出</small></div>
+      <div class="flex-1 min-w-[220px] max-sm:min-w-full h-3 rounded-full bg-[#E8DCC4] overflow-hidden" role="img" aria-label="{{ submitted_count }}人が提出、{{ not_submitted_count }}人が未提出">
+        <i class="block h-full bg-crimson" style="width: {{ (submitted_count * 100 / total_count) | round(1) }}%"></i>
+      </div>
+    </div>
+
+    {# 2列のパネル（5:7）。640px以下は1列で、「まだ提出していない人」を上にする #}
+    <div class="grid grid-cols-[5fr_7fr] max-sm:grid-cols-1 gap-4 items-start">
+      <section class="min-w-0 px-[18px] py-4 bg-kinari border-2 border-gold rounded-[14px]" aria-labelledby="sb-not-submitted">
+        <h2 id="sb-not-submitted" class="m-0 mb-1 font-['Noto_Serif_JP',serif] text-lg font-bold">まだ提出していない人（{{ not_submitted_count }}人）</h2>
+        {% if not_submitted %}
+          <span class="block mb-2.5 text-xs text-sepia-muted">声をかける目安にしてください。</span>
+          <div class="sb-scroll {{ focus_cls }}" tabindex="0" role="region" aria-label="まだ提出していない人の一覧（スクロールできます）">
+          <ul class="m-0 p-0 list-none flex flex-col">
+            {% for s in not_submitted %}
+              <li class="flex items-center gap-2.5 py-2.5 border-t first:border-t-0 border-[#E4D3AC] text-[15px]">
+                <span class="flex-1 min-w-0 font-bold [overflow-wrap:anywhere]">{{ s.student_name }}</span>
+                <span class="sb-tag sb-tag--no">未提出</span>
+              </li>
+            {% endfor %}
+          </ul>
+          </div>
+        {% else %}
+          <p class="m-0 mt-2.5 text-[15px]">全員が提出しました。</p>
+        {% endif %}
+      </section>
+
+      <section class="min-w-0 px-[18px] py-4 bg-cream-paper border border-cream-line rounded-[14px]" aria-labelledby="sb-submitted">
+        <h2 id="sb-submitted" class="m-0 mb-1 font-['Noto_Serif_JP',serif] text-lg font-bold">提出した人（{{ submitted_count }}人）</h2>
+        {% if submitted %}
+          {% if has_time %}<span class="block mb-2.5 text-xs text-sepia-muted">提出が早い順</span>{% endif %}
+          {# 右の列にいること自体が提出済みを表すので、行には「提出済み」の印を重ねない #}
+          <div class="sb-scroll {{ focus_cls }}{% if not has_time %} mt-2.5{% endif %}" tabindex="0" role="region" aria-label="提出した人の一覧（スクロールできます）">
+          <ul class="m-0 p-0 list-none flex flex-col">
+            {% for s in submitted %}
+              <li class="flex items-center gap-2.5 py-2.5 border-t first:border-t-0 border-cream-line text-[15px]">
+                <span class="flex-1 min-w-0 font-bold [overflow-wrap:anywhere]">{{ s.student_name }}</span>
+                {% if s.submitted_at %}<span class="text-[13px] text-sepia-muted tabular-nums">{{ s.submitted_at }}</span>{% endif %}
+                {# 本文は data-* に持たせ、開くときに textContent で入れる（自動エスケープのまま。|safe は使わない） #}
+                <button type="button" class="sb-open {{ ob_cls }}" aria-haspopup="dialog" aria-label="{{ s.student_name }}さんの感想を見る"
+                  data-name="{{ s.student_name }}" data-material="{{ s.material_title }}" data-time="{{ s.submitted_at or '' }}"
+                  data-pre="{{ s.pre_opinion }}" data-post="{{ s.reflection }}" data-chat-url="{{ chat_url(s) }}">感想を見る</button>
+              </li>
+            {% endfor %}
+          </ul>
+          </div>
+        {% else %}
+          <p class="m-0 mt-2.5 text-[15px]">まだ提出した人はいません。</p>
+        {% endif %}
+      </section>
+    </div>
+  {% endif %}
+</div>
+
+{% if submitted %}
+{# ポップアップ「感想を見る」。中身は、開くとき・前後に移るときに差し替える #}
+<dialog id="sb-dialog" class="sb-dlg" aria-labelledby="sb-dlg-title">
+  <div class="flex items-start justify-between gap-3 mb-3.5">
+    <div class="min-w-0">
+      <h2 id="sb-dlg-title" tabindex="-1" class="m-0 font-['Noto_Serif_JP',serif] text-xl font-bold [overflow-wrap:anywhere] focus:outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"></h2>
+      <span id="sb-dlg-meta" class="block mt-0.5 text-xs text-sepia-muted"></span>
+    </div>
+    <button type="button" id="sb-dlg-close" class="shrink-0 inline-flex items-center justify-center w-10 h-10 border border-rose-line rounded-[10px] bg-cream-paper text-xl font-bold text-crimson-dark cursor-pointer hover:bg-kinari {{ focus_cls }}" aria-label="閉じる">×</button>
+  </div>
+
+  <div class="grid grid-cols-[1fr_auto_1fr] max-sm:grid-cols-1 gap-3 items-stretch">
+    <div class="px-4 py-3 rounded-[10px] bg-cream">
+      <b class="text-[13px] text-crimson-dark">{{ label_pre }}</b><em class="not-italic ml-2 text-xs text-sepia-muted">{{ label_pre_sub }}</em>
+      <p id="sb-dlg-pre" class="sb-text"></p>
+    </div>
+    <div class="self-center text-center text-lg leading-none text-crimson max-sm:rotate-90" aria-hidden="true">→</div>
+    <div class="px-4 py-3 rounded-[10px] bg-kinari border border-gold">
+      <b class="text-[13px] text-crimson-dark">{{ label_post }}</b><em class="not-italic ml-2 text-xs text-sepia-muted">{{ label_post_sub }}</em>
+      <p id="sb-dlg-post" class="sb-text"></p>
+    </div>
+  </div>
+
+  {# 下部：PCは「前の人／会話を見る／次の人」を横並び。640px以下は「会話を見る」を上の1行、前後を半分ずつ #}
+  {# 先頭・末尾の人では、前／次のボタンを invisible にする（場所は残すので並びが崩れない。Tab でも止まらない） #}
+  <div class="flex justify-between gap-2.5 mt-4 max-sm:grid max-sm:grid-cols-2">
+    <button type="button" id="sb-dlg-prev" class="{{ ob_cls }} max-sm:w-full">← 前の人</button>
+    <a id="sb-dlg-chat" href="#" class="{{ ob_cls }} max-sm:col-span-2 max-sm:order-first max-sm:w-full">会話を見る</a>
+    <button type="button" id="sb-dlg-next" class="{{ ob_cls }} max-sm:w-full">次の人 →</button>
+  </div>
+</dialog>
+
+<script>
+  // ポップアップ「感想を見る」。新しい通信はしない。各行のボタンの data-* を読んで中身を差し替える
+  (function () {
+    const dialog = document.getElementById("sb-dialog");
+    const buttons = Array.from(document.querySelectorAll(".sb-open"));
+    const title = document.getElementById("sb-dlg-title");
+    const meta = document.getElementById("sb-dlg-meta");
+    const pre = document.getElementById("sb-dlg-pre");
+    const post = document.getElementById("sb-dlg-post");
+    const chat = document.getElementById("sb-dlg-chat");
+    const prev = document.getElementById("sb-dlg-prev");
+    const next = document.getElementById("sb-dlg-next");
+    const emptyText = {{ label_empty | tojson }};
+    let index = -1;
+    let opener = null;
+
+    function setText(el, text) {
+      const empty = !text || !text.trim();
+      el.textContent = empty ? emptyText : text;
+      el.classList.toggle("is-empty", empty);
+    }
+
+    function show(i) {
+      index = i;
+      const d = buttons[i].dataset;
+      title.textContent = d.name + "さんの感想";
+      meta.textContent = [d.material, d.time ? "提出 " + d.time : ""].filter(Boolean).join("・");
+      meta.hidden = !meta.textContent;
+      setText(pre, d.pre);
+      setText(post, d.post);
+      chat.href = d.chatUrl;
+      chat.setAttribute("aria-label", d.name + "さんの会話を見る");
+      prev.classList.toggle("invisible", i === 0);
+      next.classList.toggle("invisible", i === buttons.length - 1);
+      dialog.scrollTop = 0;
+    }
+
+    buttons.forEach(function (button, i) {
+      button.addEventListener("click", function () {
+        opener = button;
+        show(i);
+        button.setAttribute("aria-expanded", "true");
+        dialog.showModal();
+      });
+    });
+
+    // 前後に移るときは閉じずに中身を入れ替え、見出しにフォーカスを移す（読み上げで人が変わったことが分かる）
+    prev.addEventListener("click", function () { if (index > 0) { show(index - 1); title.focus(); } });
+    next.addEventListener("click", function () { if (index < buttons.length - 1) { show(index + 1); title.focus(); } });
+
+    document.getElementById("sb-dlg-close").addEventListener("click", function () { dialog.close(); });
+
+    // 背景の暗い部分をクリックしたら閉じる（窓の外側をクリックしたときだけ）
+    dialog.addEventListener("click", function (event) {
+      if (event.target !== dialog) return;
+      const r = dialog.getBoundingClientRect();
+      const inside = event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom;
+      if (!inside) dialog.close();
+    });
+
+    // 閉じたら（×・Escape・背景のどれでも）、押したボタンにフォーカスを戻す
+    dialog.addEventListener("close", function () {
+      if (opener) {
+        opener.setAttribute("aria-expanded", "false");
+        opener.focus();
+      }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

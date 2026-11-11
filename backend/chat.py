@@ -4,6 +4,7 @@ import uuid
 
 import ai
 import db
+import moderation
 from prompts import build_system_prompt
 from rate_limit import RateLimiter
 
@@ -121,7 +122,8 @@ def reply(conversation_id: str, role: dict, material_text: str, message: str, pa
         conversation_id,
         role["id"],
         [
-            {"role": "user", "content": message},
+            # 生徒の発言だけ、乱暴な言葉を確認する（#21）。送信は止めず、教師の一覧に出すだけ
+            {"role": "user", "content": message, "detections": moderation.detect(message)},
             {"role": "assistant", "content": reply_text.strip(), "evidence": evidence},
         ],
     )

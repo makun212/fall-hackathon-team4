@@ -12,7 +12,8 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import db  # noqa: E402
-import main  # noqa: E402
+import main  # noqa: E402
+from auth_helper import login  # noqa: E402
 
 CONVERSATION_ID = "a" * 32
 
@@ -21,6 +22,7 @@ class TeacherChatTests(unittest.TestCase):
     def setUp(self):
         db.use_engine(create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}))
         self.app = TestClient(main.app)
+        login(self.app)
         self.seed_count = len(main.get_conversation_summaries())
 
     def test_db_conversation_is_listed_with_seed_conversations(self):

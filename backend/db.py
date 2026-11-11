@@ -12,9 +12,11 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    UniqueConstraint,
     Text,
     create_engine,
     event,
+    func,
     delete,
     insert,
     select,
@@ -28,6 +30,18 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 DEFAULT_DATABASE_URL = "sqlite:///" + str(Path(__file__).resolve().parent / "app.db")
 
 metadata = MetaData()
+
+# ログインした人（#33）。id は "google:<GoogleのユーザーID>"。role は student か teacher
+# 先生になるのは、.env の TEACHER_EMAILS に書いた Google アカウントだけ（auth.py）。生徒が自分で role を変えることはできない
+users = Table(
+    "users",
+    metadata,
+    Column("id", String(128), primary_key=True),
+    Column("email", Text),  # 個人情報を減らすため、今は保存しない（#36）。前のデータとの互換のために列だけ残す
+    Column("name", Text),
+    Column("role", String(16), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
 
 # 会話1つ分。生徒がチャット画面を開くたびに1件できる
 conversations = Table(
@@ -61,6 +75,44 @@ chat_messages = Table(
     Column("content", Text, nullable=False),
     Column("evidence", JSON),  # AIの返事の根拠 [{quote_text, location}]（#45）
     Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+# 生徒の発言で見つかった乱暴な言葉の検知（#21）。moderation.detect() の結果をそのまま保存する
+# 送信を止めたり、発言を書き換えたりはしない。教師が確認する順番の目安にだけ使う
+detections = Table(
+    "detections",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("message_id", Integer, ForeignKey("chat_messages.id"), nullable=False, index=True),
+    Column("type", String(32), nullable=False),
+    Column("level", String(16), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+# AI が作った立場の候補（#16）。教材と範囲（第何段落から何段落まで）ごとに1回だけ作り、使い回す
+# roles は [{name, summary, features, basis, prompt_hint}]。候補の ID は candidates.candidate_id() で作る
+candidate_sets = Table(
+    "candidate_sets",
+    metadata,
+    Column("id", String(32), primary_key=True),
+    Column("material_id", String(64), nullable=False),
+    Column("range_start", Integer, nullable=False),
+    Column("range_end", Integer, nullable=False),
+    Column("roles", JSON, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint("material_id", "range_start", "range_end"),
+)
+
+# 授業（#43）。教師が教材セットで授業を開始すると1件でき、終了すると ended_at が入る
+# 開始中（ended_at が空）の授業がある教材セットだけが、生徒のトップに出て、新しい対話を始められる
+lessons = Table(
+    "lessons",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("material_set_id", String(64), nullable=False, index=True),
+    Column("teacher_id", String(128)),
+    Column("started_at", DateTime(timezone=True), nullable=False),
+    Column("ended_at", DateTime(timezone=True)),
 )
 
 # 教師がロールの編集画面で保存した内容（#13）。name が None なら「元に戻した」
@@ -109,12 +161,21 @@ def now():
     return datetime.now(timezone.utc)
 
 
+def database_url(url: str) -> str:
+    # Render などが渡す「postgres://」「postgresql://」の URL を、SQLAlchemy と psycopg（v3）で使える形にする
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def get_engine():
     # 最初に呼ばれたときに1回だけ作り、テーブルがなければ作る
     global _engine
     if _engine is None:
-        url = os.getenv("DATABASE_URL") or DEFAULT_DATABASE_URL
-        _engine = create_engine(url)
+        url = database_url(os.getenv("DATABASE_URL") or DEFAULT_DATABASE_URL)
+        # pool_pre_ping：本番の DB との接続が切れていても、使う前につなぎ直す
+        _engine = create_engine(url, pool_pre_ping=True)
         if url.startswith("sqlite"):
             # SQLite は、外部キーの確認を毎回オンにする必要がある
             event.listen(_engine, "connect", lambda conn, _: conn.execute("PRAGMA foreign_keys=ON"))
@@ -132,8 +193,10 @@ def use_engine(engine):
 # ---- 会話（#20）と、対話前の考え・感想（#46） ----
 
 
-def create_conversation(conversation_id: str, role_id: str, pre_opinion: str, material_set_id: str | None = None):
-    # 対話前の考えを送ったときに、会話を1件作る
+def create_conversation(
+    conversation_id: str, role_id: str, pre_opinion: str, material_set_id: str | None = None, student_id: str | None = None
+):
+    # 対話前の考えを送ったときに、会話を1件作る。student_id は会話の持ち主（ログインした人の id）
     with get_engine().begin() as conn:
         conn.execute(
             insert(conversations).values(
@@ -141,6 +204,7 @@ def create_conversation(conversation_id: str, role_id: str, pre_opinion: str, ma
                 role_id=role_id,
                 pre_opinion=pre_opinion,
                 material_set_id=material_set_id,
+                student_id=student_id,
                 created_at=now(),
             )
         )
@@ -161,11 +225,14 @@ def has_conversation_context(conversation_id: str) -> bool:
         ).first() is not None
 
 
-def bind_conversation_context(conversation_id: str, role_id: str, material_set_id: str | None) -> bool:
+def bind_conversation_context(
+    conversation_id: str, role_id: str, material_set_id: str | None, student_id: str | None = None
+) -> bool:
     # 初回の直接POSTでも、AIを呼ぶ前に会話のロールと教材セットをDBに固定する。
     # 既存の会話を書き換えず、同じ文脈の要求だけを許す。固定記録のあるNoneだけが全文を表す。
+    # 持ち主（student_id）も一致しなければ False（ほかの人の会話には書き込ませない。#33）
     def matches(row):
-        return row["role_id"] == role_id and row["material_set_id"] == material_set_id
+        return row["role_id"] == role_id and row["material_set_id"] == material_set_id and row["student_id"] == student_id
 
     try:
         with get_engine().begin() as conn:
@@ -177,7 +244,11 @@ def bind_conversation_context(conversation_id: str, role_id: str, material_set_i
                 return scope_known and matches(row)
             conn.execute(
                 insert(conversations).values(
-                    id=conversation_id, role_id=role_id, material_set_id=material_set_id, created_at=now()
+                    id=conversation_id,
+                    role_id=role_id,
+                    material_set_id=material_set_id,
+                    student_id=student_id,
+                    created_at=now(),
                 )
             )
             conn.execute(insert(conversation_contexts).values(conversation_id=conversation_id))
@@ -221,19 +292,22 @@ def save_messages(conversation_id: str, role_id: str, messages):
         exists = conn.execute(select(conversations.c.id).where(conversations.c.id == conversation_id)).first()
         if exists is None:
             conn.execute(insert(conversations).values(id=conversation_id, role_id=role_id, created_at=created))
-        conn.execute(
-            insert(chat_messages),
-            [
-                {
-                    "conversation_id": conversation_id,
-                    "role": m["role"],
-                    "content": m["content"],
-                    "evidence": m.get("evidence"),
-                    "created_at": created,
-                }
-                for m in messages
-            ],
-        )
+        for m in messages:
+            result = conn.execute(
+                insert(chat_messages).values(
+                    conversation_id=conversation_id,
+                    role=m["role"],
+                    content=m["content"],
+                    evidence=m.get("evidence"),
+                    created_at=created,
+                )
+            )
+            # 発言に検知の結果があれば、一緒に保存する（#21）
+            message_id = result.inserted_primary_key[0]
+            for d in m.get("detections") or []:
+                conn.execute(
+                    insert(detections).values(message_id=message_id, type=d["type"], level=d["level"], created_at=created)
+                )
 
 
 # ---- 教師用：チャット一覧（#20） ----
@@ -254,6 +328,7 @@ def read_chat_records():
     with get_engine().connect() as conn:
         conversation_rows = conn.execute(select(conversations).order_by(conversations.c.created_at)).all()
         message_rows = conn.execute(select(chat_messages).order_by(chat_messages.c.id)).all()
+        detection_rows = conn.execute(select(detections).order_by(detections.c.id)).all()
     return {
         "conversations": [
             {
@@ -275,6 +350,29 @@ def read_chat_records():
             }
             for m in message_rows
         ],
+        "detections": [{"message_id": f"db{d.message_id}", "type": d.type, "level": d.level} for d in detection_rows],
+    }
+
+
+def read_reflections():
+    # 教師用「感想の提出状況」に使う。感想を提出した会話の
+    # {会話ID: {"pre_opinion": 最初の感想, "reflection": 最後の感想, "reflected_at": 提出時刻（JSTの文字列。記録がなければ None）}}
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(
+                conversations.c.id,
+                conversations.c.pre_opinion,
+                conversations.c.reflection,
+                conversations.c.reflected_at,
+            ).where(conversations.c.reflection.is_not(None))
+        ).all()
+    return {
+        r.id: {
+            "pre_opinion": r.pre_opinion or "",
+            "reflection": r.reflection or "",
+            "reflected_at": to_jst_text(r.reflected_at) if r.reflected_at else None,
+        }
+        for r in rows
     }
 
 
@@ -357,3 +455,145 @@ def read_material_sets():
         {**dict(row._mapping), "created_at": to_jst_text(row.created_at), "roles": roles_by_set.get(row.id, [])}
         for row in set_rows
     ]
+
+
+# ---- ログインした人（#33） ----
+
+
+def upsert_user(user_id: str, email: str, name: str):
+    # ログインのたびに呼ぶ。初めての人は生徒として作る。名前とメールは最新にする（role は変えない）
+    with get_engine().begin() as conn:
+        exists = conn.execute(select(users.c.id).where(users.c.id == user_id)).first()
+        if exists is None:
+            conn.execute(insert(users).values(id=user_id, email=email, name=name, role="student", created_at=now()))
+        else:
+            conn.execute(update(users).where(users.c.id == user_id).values(email=email, name=name))
+    return get_user(user_id)
+
+
+def get_user(user_id: str):
+    # ユーザー1人を辞書で返す。なければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(select(users).where(users.c.id == user_id)).first()
+    return dict(row._mapping) if row else None
+
+
+def set_user_role(user_id: str, role: str):
+    # 先生の Google アカウントでログインしたときに teacher、リストから外れたら student にする（auth.py）
+    with get_engine().begin() as conn:
+        conn.execute(update(users).where(users.c.id == user_id).values(role=role))
+
+
+def read_user_names():
+    # {ユーザーの id: 名前}。教師のチャット一覧で、生徒の名前を出すのに使う
+    with get_engine().connect() as conn:
+        return {r.id: r.name or r.email or "名前なし" for r in conn.execute(select(users.c.id, users.c.name, users.c.email))}
+
+
+# ---- AI が作った立場の候補（#16） ----
+
+
+def find_candidate_set(material_id: str, range_start: int, range_end: int):
+    # 教材と範囲の候補のまとまりを返す。まだ作っていなければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(
+            select(candidate_sets).where(
+                candidate_sets.c.material_id == material_id,
+                candidate_sets.c.range_start == range_start,
+                candidate_sets.c.range_end == range_end,
+            )
+        ).first()
+    return dict(row._mapping) if row else None
+
+
+def save_candidate_set(candidate_set_id: str, material_id: str, range_start: int, range_end: int, roles):
+    # 候補を保存して、保存されている候補のまとまりを返す
+    # 同じ教材・範囲を同時に作ったときは、先に保存されたほうを使う
+    try:
+        with get_engine().begin() as conn:
+            conn.execute(
+                insert(candidate_sets).values(
+                    id=candidate_set_id,
+                    material_id=material_id,
+                    range_start=range_start,
+                    range_end=range_end,
+                    roles=roles,
+                    created_at=now(),
+                )
+            )
+    except IntegrityError:
+        pass
+    return find_candidate_set(material_id, range_start, range_end)
+
+
+def get_candidate_set(candidate_set_id: str):
+    with get_engine().connect() as conn:
+        row = conn.execute(select(candidate_sets).where(candidate_sets.c.id == candidate_set_id)).first()
+    return dict(row._mapping) if row else None
+
+
+# ---- 授業（#43） ----
+
+
+def get_open_lesson(material_set_id: str):
+    # 開始中の授業。なければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(
+            select(lessons)
+            .where(lessons.c.material_set_id == material_set_id, lessons.c.ended_at.is_(None))
+            .order_by(lessons.c.id.desc())
+        ).first()
+    return dict(row._mapping) if row else None
+
+
+def get_last_lesson(material_set_id: str):
+    # いちばん新しい授業（終了したものも含む）。なければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(
+            select(lessons).where(lessons.c.material_set_id == material_set_id).order_by(lessons.c.id.desc())
+        ).first()
+    return dict(row._mapping) if row else None
+
+
+def start_lesson(material_set_id: str, teacher_id: str | None = None):
+    # 授業を開始する。すでに開始中なら、その授業を返す（二重に開始しない）
+    with get_engine().begin() as conn:
+        exists = conn.execute(
+            select(lessons.c.id).where(lessons.c.material_set_id == material_set_id, lessons.c.ended_at.is_(None))
+        ).first()
+        if exists is None:
+            conn.execute(insert(lessons).values(material_set_id=material_set_id, teacher_id=teacher_id, started_at=now()))
+    return get_open_lesson(material_set_id)
+
+
+def end_lesson(material_set_id: str) -> bool:
+    # 開始中の授業を終了する。終了できたら True
+    with get_engine().begin() as conn:
+        result = conn.execute(
+            update(lessons)
+            .where(lessons.c.material_set_id == material_set_id, lessons.c.ended_at.is_(None))
+            .values(ended_at=now())
+        )
+    return result.rowcount > 0
+
+
+def open_lesson_set_ids():
+    # 授業が開始中の教材セットの ID
+    with get_engine().connect() as conn:
+        return {r.material_set_id for r in conn.execute(select(lessons.c.material_set_id).where(lessons.c.ended_at.is_(None)))}
+
+
+def read_lesson_conversations(material_set_id: str):
+    # 教材セットの会話（授業の画面で、提出状況を出すため）。古い順
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(conversations).where(conversations.c.material_set_id == material_set_id).order_by(conversations.c.created_at)
+        ).all()
+        counts = dict(
+            conn.execute(
+                select(chat_messages.c.conversation_id, func.count())
+                .where(chat_messages.c.conversation_id.in_([r.id for r in rows]), chat_messages.c.role == "user")
+                .group_by(chat_messages.c.conversation_id)
+            ).all()
+        )
+    return [{**dict(r._mapping), "message_count": counts.get(r.id, 0)} for r in rows]

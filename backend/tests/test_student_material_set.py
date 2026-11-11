@@ -14,7 +14,8 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 import ai  # noqa: E402
 import chat  # noqa: E402
 import db  # noqa: E402
-import main  # noqa: E402
+import main  # noqa: E402
+from auth_helper import login  # noqa: E402
 from rate_limit import RateLimiter  # noqa: E402
 
 
@@ -35,6 +36,7 @@ class StudentMaterialSetTests(unittest.TestCase):
         chat.conversation_limiter = RateLimiter(1000, 60)
         chat.global_limiter = RateLimiter(1000, 60)
         self.app = TestClient(main.app)
+        login(self.app)
 
     def tearDown(self):
         ai._client = None
@@ -54,6 +56,8 @@ class StudentMaterialSetTests(unittest.TestCase):
         self.assertIn("[p073]", prompt)
 
     def test_seed_material_set_limits_roles_and_text(self):
+# 生徒が教材セットを選べるのは、授業が開始中のときだけ（#43）
+        db.start_lesson("ms001")
         page = self.app.get("/student/roles?set=ms001").text
         self.assertEqual(3, page.count('name="role_id"'))
         # ms001 にないロールは選べない
@@ -72,6 +76,7 @@ class StudentMaterialSetTests(unittest.TestCase):
             data={"material_id": "m001", "range_type": "paragraph", "start": "40", "end": "50", "selected": ["r005"]},
         )
         material_set_id = db.read_material_sets()[0]["id"]
+        db.start_lesson(material_set_id)
         page = self.app.get(f"/student/roles?set={material_set_id}").text
         self.assertEqual(1, page.count('name="role_id"'))
         _, prompt = self.talk("r005")

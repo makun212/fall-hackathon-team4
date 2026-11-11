@@ -1,6 +1,5 @@
 import json
 import re
-import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
@@ -9,7 +8,10 @@ from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
+import auth
+import candidates as candidate_service
 import chat as chat_service
 import db
 from ai import AIBusyError, AIError
@@ -18,6 +20,17 @@ from content import apply_maihime
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 app = FastAPI()
+# ログインと権限（#33）。access_control より後に足した SessionMiddleware が外側になり、先にセッションを読む
+app.include_router(auth.router)
+app.middleware("http")(auth.access_control)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=auth.SESSION_SECRET,
+    session_cookie=auth.SESSION_COOKIE,
+    max_age=auth.SESSION_MAX_AGE,
+    same_site="lax",
+    https_only=auth.SESSION_HTTPS_ONLY,
+)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=FRONTEND_DIR / "templates")
 
@@ -124,12 +137,21 @@ REFLECTION_MAX_LENGTH = 200
 
 
 # ダミー。事前の意見の保存ができたら、ログイン中の生徒の保存済みの値に差し替える
-def find_conversation(conversation_id, role):
-    # 会話 ID が正しい形で、DBにあり、ロールも一致するときだけ会話を返す。それ以外は None
+def current_student_id(request: Request):
+    # ログインしている人の id（会話の持ち主として保存する）。auth.access_control が request.state.user に入れる
+    user = getattr(request.state, "user", None)
+    return user["id"] if user else None
+
+
+def find_conversation(conversation_id, role, request: Request):
+    # 会話 ID が正しい形で、DBにあり、ロールも持ち主も一致するときだけ会話を返す。それ以外は None
+    # 持ち主が違う会話は、ないものとして扱う（ほかの人の考えを見せない・書き換えさせない。#33）
     if not chat_service.is_valid_conversation_id(conversation_id):
         return None
     conversation = db.get_conversation(conversation_id)
     if conversation is None or conversation["role_id"] != role["id"]:
+        return None
+    if conversation["student_id"] != current_student_id(request):
         return None
     return conversation
 
@@ -215,7 +237,9 @@ def read_chat_records():
     from_db = db.read_chat_records()
     records["conversations"] += from_db["conversations"]
     records["messages"] += from_db["messages"]
-    # Googleログイン（#33）の前は、DBの会話に生徒がいないので「ゲスト」と出す
+    records["detections"] += from_db["detections"]
+    # ログインした人の名前（#33）。ログイン機能より前に作られた会話は「ゲスト」と出す
+    records["user_names"].update(db.read_user_names())
     records["user_names"][None] = "ゲスト"
     return records
 
@@ -342,6 +366,55 @@ def get_conversation_detail(conversation_id: str):
             for m in messages
         ],
     }
+
+def get_submission_status():
+    # 教師用「感想の提出状況」：会話を始めた生徒（会話1件＝1人）を、提出済みと未提出に分ける
+    # 提出済みは提出が早い順（時刻の記録がないものは最後）。未提出は会話を始めた順
+    records = read_chat_records()
+    # ダミーデータの感想（post_opinion があるもの）と、DBの感想を合わせる。キー名をそろえるのはここだけ
+    reflections = {
+        r["conversation_id"]: {
+            "pre_opinion": r.get("pre_opinion") or "",
+            "reflection": r["post_opinion"],
+            "reflected_at": r.get("submitted_at"),
+        }
+        for r in SEED_DATA.get("reflections", [])
+        if r.get("post_opinion")
+    }
+    reflections.update(db.read_reflections())
+
+    submitted, not_submitted = [], []
+    for conversation in sorted(records["conversations"], key=lambda c: datetime.fromisoformat(c["created_at"])):
+        student = {
+            "conversation_id": conversation["id"],
+            "student_name": records["user_names"].get(conversation["student_id"], "不明"),
+        }
+        reflection = reflections.get(conversation["id"])
+        if reflection is None:
+            not_submitted.append(student)
+            continue
+        time_text = reflection["reflected_at"]
+        submitted_time = datetime.fromisoformat(time_text) if time_text else None
+        student["submitted_at"] = submitted_time.strftime("%H:%M") if submitted_time else None
+        # ポップアップ「感想を見る」に出す本文と教材名
+        student["pre_opinion"] = reflection["pre_opinion"]
+        student["reflection"] = reflection["reflection"]
+        student["material_title"] = records["material_set_titles"].get(conversation["material_set_id"]) or ""
+        student["_sort_time"] = submitted_time
+        submitted.append(student)
+
+    submitted.sort(key=lambda s: (s["_sort_time"] is None, s["_sort_time"] or datetime.min))
+    for student in submitted:
+        del student["_sort_time"]
+
+    material_set_ids = dict.fromkeys(c["material_set_id"] for c in records["conversations"])
+    titles = [t for t in (records["material_set_titles"].get(i) for i in material_set_ids) if t]
+    return {
+        "material_set_title": "、".join(titles),
+        "submitted": submitted,
+        "not_submitted": not_submitted,
+    }
+
 
 # ---- 教師用：教材と使用範囲の選択 ----
 
@@ -535,8 +608,10 @@ def find_static_image(path):
 
 
 # ダミー。AIの候補生成と、保存した編集内容に、あとで差し替える
-def get_role_candidates(material_id: str):
+def get_role_candidates(material_id: str, range_type: str = "all", start: str = "", end: str = ""):
     # 教材の候補を、同じ形の辞書のリストで返す（最大6つ）。候補のキー名を参照するのはここだけ
+    # 舞姫は、厚樹さんが根拠まで確かめたプリセットを使う。ほかの教材は、範囲の本文から AI が作る（#16）
+    # AI が作れなかったときは ai.AIError（呼び出し側で画面にエラーを出す）
     # 形: candidate_id、name、summary、features（文字列のリスト）、image（なければ None）、edited（True / False）、
     #     original（元のAIの案。編集を適用する前の、編集できる項目 {"name", "features"}）
     # summary（立場の一言）は編集できないため、いつもAIの元の値
@@ -555,7 +630,8 @@ def get_role_candidates(material_id: str):
             for r in preset.get("roles") or []
         ]
     else:
-        candidates = []
+        candidates = generated_candidates(material_id, range_type, start, end)
+    if not candidates:
         for group in SEED_DATA.get("role_candidates") or []:
             if group.get("material_id") != material_id:
                 continue
@@ -897,6 +973,12 @@ def render_login(request: Request, role: str):
             "heading": LOGIN_ROLES[role]["heading"],
             "home_url": LOGIN_ROLES[role]["home_url"],
             "login_url": f"{GOOGLE_LOGIN_URL}?role={role}",
+            # 開発用ログイン（.env の DEV_LOGIN=1 のときだけ出す）
+            "dev_login_url": f"/auth/dev/login?role={role}" if auth.DEV_LOGIN else None,
+            # 先生として登録されていないアカウントで、先生用から入ろうとしたとき（auth.py）
+            "error": "このGoogleアカウントは、先生として登録されていません。登録したアカウントでログインし直すか、生徒用からログインしてください。"
+            if role == "teacher" and request.query_params.get("error") == "not_teacher"
+            else None,
         },
     )
 
@@ -995,11 +1077,18 @@ def teacher_candidates(
         return RedirectResponse("/teacher/materials", status_code=303)
     material, range_type, start, end = resolved
 
-    # ダミーの待ち時間。AI接続後に削除する（待ち時間の表示の動作確認用）。戻ってきたとき（back=1）は待たせない
-    if back != "1":
-        time.sleep(2)
-
-    candidates = get_role_candidates(material["id"])
+    try:
+        candidates = get_role_candidates(material["id"], range_type, start, end)
+    except AIBusyError:
+        return render_teacher_materials(
+            request, material, range_type, start, end,
+            error="AIが混み合っています。少し待ってから、もう一度「次へ」を押してください。", status_code=429,
+        )
+    except AIError:
+        return render_teacher_materials(
+            request, material, range_type, start, end,
+            error="AIが立場の候補を作れませんでした。もう一度「次へ」を押してください。", status_code=502,
+        )
     return render_teacher_candidates(
         request, material, range_type, start, end, candidates, filter_selected(candidates, selected)
     )
@@ -1021,7 +1110,7 @@ def teacher_candidates_confirm(
         return RedirectResponse("/teacher/materials", status_code=303)
     material, range_type, start, end = resolved
 
-    candidates = get_role_candidates(material["id"])
+    candidates = get_role_candidates(material["id"], range_type, start, end)
     selected_ids = filter_selected(candidates, selected)
     error = None
     if not selected:
@@ -1081,7 +1170,7 @@ def resolve_candidate_edit_request(candidate_id: str, material_id: str, range_ty
     if resolved is None:
         return None
     material, range_type, start, end = resolved
-    candidates = get_role_candidates(material["id"])
+    candidates = get_role_candidates(material["id"], range_type, start, end)
     candidate = next((c for c in candidates if c["candidate_id"] == candidate_id), None)
     if candidate is None:
         raise HTTPException(status_code=404, detail="ロールの候補が見つかりません")
@@ -1187,9 +1276,39 @@ def teacher_material_set_edit(request: Request, material_set_id: str):
 # TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
 @app.get("/teacher/material-sets/{material_set_id}/lesson", response_class=HTMLResponse)
 def teacher_lesson(request: Request, material_set_id: str):
+    material_set = next((s for s in get_confirmed_material_sets() if s["id"] == material_set_id), None)
+    if material_set is None:
+        raise HTTPException(status_code=404, detail="教材セットが見つかりません")
+    lesson = db.get_last_lesson(material_set_id)
+    return templates.TemplateResponse(
+        request,
+        "teacher_lesson.html",
+        {
+            "material_set": material_set,
+            # not_started（まだ）/ open（授業中）/ ended（終了した）
+            "status": "not_started" if lesson is None else ("open" if lesson["ended_at"] is None else "ended"),
+            "submissions": get_lesson_submissions(material_set_id),
+        },
+    )
+
+
+# 教師用：授業の開始・終了（#43）。終わったら授業の画面に戻る
+@app.post("/teacher/material-sets/{material_set_id}/lesson/start")
+def teacher_lesson_start(request: Request, material_set_id: str, show_chats: bool = Form(False)):
     if material_set_id not in {s["id"] for s in get_confirmed_material_sets()}:
         raise HTTPException(status_code=404, detail="教材セットが見つかりません")
-    return templates.TemplateResponse(request, "teacher_lesson.html")
+    db.start_lesson(material_set_id, current_student_id(request))
+    if show_chats:
+        return RedirectResponse("/teacher/chats", status_code=303)
+    return RedirectResponse(f"/teacher/material-sets/{material_set_id}/lesson", status_code=303)
+
+
+@app.post("/teacher/material-sets/{material_set_id}/lesson/end")
+def teacher_lesson_end(request: Request, material_set_id: str):
+    if material_set_id not in {s["id"] for s in get_confirmed_material_sets()}:
+        raise HTTPException(status_code=404, detail="教材セットが見つかりません")
+    db.end_lesson(material_set_id)
+    return RedirectResponse(f"/teacher/material-sets/{material_set_id}/lesson", status_code=303)
 
 
 # 教師用：生徒のチャット一覧。only_detected=1 なら、検知がある会話だけにする
@@ -1235,11 +1354,27 @@ def teacher_chat_detail(request: Request, conversation_id: str):
     )
 
 
+# 教師用：感想の提出状況。会話を始めた生徒を、提出済みと未提出に分けて見せる
+# 権限は auth.access_control で確認する。
+@app.get("/teacher/submissions", response_class=HTMLResponse)
+def teacher_submissions(request: Request):
+    status = get_submission_status()
+    return templates.TemplateResponse(
+        request,
+        "teacher_submissions.html",
+        {
+            "material_set_title": status["material_set_title"],
+            "submitted": status["submitted"],
+            "not_submitted": status["not_submitted"],
+        },
+    )
+
+
 # 生徒用のトップ（仮）
 @app.get("/student", response_class=HTMLResponse)
 def student_home(request: Request):
     return templates.TemplateResponse(
-        request, "student_home.html", {"material_sets": get_confirmed_material_sets()}
+        request, "student_home.html", {"material_sets": get_lesson_material_sets()}
     )
 
 
@@ -1249,7 +1384,8 @@ def student_roles(request: Request, material_set_id: str = Query("", alias="set"
     # ?set= で教材セットを選んだときは、その教材セットを Cookie に覚えて、ロールを出す（#44）
     if material_set_id:
         material_set = get_material_set_for_chat(material_set_id)
-        if material_set is None:
+        if material_set is None or not lesson_is_open(material_set_id):
+            # 授業が開始中でない教材セットは選べない（#43）
             return RedirectResponse("/student", status_code=303)
         response = templates.TemplateResponse(request, "role_select.html", {"roles": material_set["roles"]})
         response.set_cookie(MATERIAL_SET_COOKIE, material_set_id, httponly=True, samesite="lax")
@@ -1291,9 +1427,19 @@ def student_question_submit(
         # 入力した文章は消さずに、入力欄に戻す
         return render_student_question(request, role, opinion=opinion, error=error, status_code=422)
 
+    if not can_start_conversation(request, material_set):
+        # 授業が終わった教材セットでは、新しい対話を始められない（#43）
+        return RedirectResponse("/student", status_code=303)
+
     # 対話前の考えを保存して、会話を始める（#46）
     conversation_id = chat_service.new_conversation_id()
-    db.create_conversation(conversation_id, role["id"], text, request.cookies.get(MATERIAL_SET_COOKIE) if material_set else None)
+    db.create_conversation(
+        conversation_id,
+        role["id"],
+        text,
+        request.cookies.get(MATERIAL_SET_COOKIE) if material_set else None,
+        student_id=current_student_id(request),
+    )
 
     # リダイレクト先は、ユーザーの入力ではなく、検証したロールのIDと、作った会話 ID から組み立てる
     return RedirectResponse(
@@ -1307,19 +1453,28 @@ def student_chat(request: Request, role_id: str | None = None, conversation_id: 
     if role_id is None:
         return templates.TemplateResponse(request, "index.html")
     conversation = db.get_conversation(conversation_id) if chat_service.is_valid_conversation_id(conversation_id) else None
-    if conversation is not None and conversation["role_id"] != role_id:
-        # 従来どおり、別ロールの会話IDを新しい会話へ引き継がない。
+    if conversation is not None and (
+        conversation["role_id"] != role_id or conversation["student_id"] != current_student_id(request)
+    ):
+        # 従来どおり、別ロールの会話IDを新しい会話へ引き継がない。ほかの人の会話も引き継がない（#33）
         conversation = None
     material_set = conversation_material_set(request, conversation)
     role = find_conversation_role(role_id, material_set)
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
     # 問いかけ画面から来たときは、その会話を続ける。なければ新しい会話にする
+    if conversation is None and not can_start_conversation(request, material_set):
+        # 授業が終わった教材セットでは、新しい対話を始められない（#43）
+        return RedirectResponse("/student", status_code=303)
     conversation_id = conversation["id"] if conversation else chat_service.new_conversation_id()
     if conversation is None:
         # 問いかけ画面を通らずに開く場合も、IDを発行した時点の教材を固定する。
         db.create_conversation(
-            conversation_id, role["id"], "", request.cookies.get(MATERIAL_SET_COOKIE) if material_set else None
+            conversation_id,
+            role["id"],
+            "",
+            request.cookies.get(MATERIAL_SET_COOKIE) if material_set else None,
+            student_id=current_student_id(request),
         )
     return templates.TemplateResponse(request, "index.html", {"role": role, "conversation_id": conversation_id})
 
@@ -1330,7 +1485,7 @@ def student_reflection(request: Request, role_id: str | None = None, conversatio
     role = find_role(role_id, request) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
-    return render_student_reflection(request, role, find_conversation(conversation_id, role))
+    return render_student_reflection(request, role, find_conversation(conversation_id, role, request))
 
 
 # 生徒用：感想入力画面のフォームの送信先。正しければ終了画面へ進む
@@ -1344,7 +1499,7 @@ def student_reflection_submit(
     role = find_role(role_id, request) if role_id else None
     if role is None:
         return RedirectResponse("/student/roles", status_code=303)
-    conversation = find_conversation(conversation_id, role)
+    conversation = find_conversation(conversation_id, role, request)
 
     # ブラウザは送信時に改行を「\r\n」（2文字）にするため、画面の maxlength と数え方をそろえる
     text = reflection.replace("\r\n", "\n").strip()
@@ -1373,6 +1528,44 @@ def student_finish(request: Request):
     return templates.TemplateResponse(request, "student_finish.html")
 
 
+# ---- 授業（#43） ----
+
+
+def lesson_is_open(material_set_id) -> bool:
+    return bool(material_set_id) and db.get_open_lesson(material_set_id) is not None
+
+
+def can_start_conversation(request: Request, material_set) -> bool:
+    # 新しい会話を始めてよいか。教材セットを選んでいれば、その授業が開始中のときだけ
+    # 教材セットを選ばない全文モード（/student/roles を直接開いたとき）は、授業と関係なく使える
+    if material_set is None:
+        return True
+    return lesson_is_open(request.cookies.get(MATERIAL_SET_COOKIE))
+
+
+def get_lesson_material_sets():
+    # 生徒のトップに出す教材セット（授業が開始中のものだけ）
+    open_ids = db.open_lesson_set_ids()
+    return [s for s in get_confirmed_material_sets() if s["id"] in open_ids]
+
+
+def get_lesson_submissions(material_set_id: str):
+    # 授業の画面に出す、生徒ごとの対話と感想の提出状況
+    record = next((r for r in read_material_set_records() if r["id"] == material_set_id), None)
+    role_names = {r["role_id"]: r["name"] for r in (record["roles"] if record else [])}
+    user_names = db.read_user_names()
+    return [
+        {
+            "student_name": user_names.get(c["student_id"], "ゲスト"),
+            "role_name": role_names.get(c["role_id"], "不明"),
+            "pre_opinion": c["pre_opinion"] or "",
+            "reflection": c["reflection"],
+            "message_count": c["message_count"],
+        }
+        for c in db.read_lesson_conversations(material_set_id)
+    ]
+
+
 def get_material_text(material_id: str, range_start: int | None = None, range_end: int | None = None):
     # AIに渡す本文。段落ごとに [p001] のような段落IDを付ける（AIが根拠の場所を示せるように）
     # range_start・range_end（第何段落か。1から数える）を渡すと、その範囲の段落だけにする（#44）
@@ -1394,8 +1587,47 @@ def get_paragraph_labels():
     }
 
 
+def generated_candidates(material_id: str, range_type: str, start: str, end: str):
+    # AI が作った候補（#16）を、画面の候補の形にする。教材と範囲ごとに1回だけ作り、DB から使い回す
+    range_start, range_end = paragraph_range(material_id, range_type, start, end)
+    candidate_set = db.find_candidate_set(material_id, range_start, range_end)
+    if candidate_set is None:
+        roles = candidate_service.generate(
+            get_material_text(material_id, range_start, range_end),
+            get_paragraph_labels(),
+            name_max=ROLE_NAME_MAX,
+            feature_max=ROLE_FEATURE_MAX,
+        )
+        candidate_set = db.save_candidate_set(chat_service.new_conversation_id(), material_id, range_start, range_end, roles)
+    return [
+        {
+            "candidate_id": candidate_service.candidate_id(candidate_set["id"], i),
+            "name": role["name"],
+            "summary": role["summary"],
+            "features": list(role["features"]),
+            "image": None,
+            "edited": False,
+        }
+        for i, role in enumerate(candidate_set["roles"])
+    ]
+
+
+def find_generated_role(role_id: str):
+    # AI が作った候補（g<まとまりのID>-<番号>）の、元のロール（根拠と口調つき）。なければ None
+    if not isinstance(role_id, str) or not candidate_service.CANDIDATE_ID_PATTERN.fullmatch(role_id):
+        return None
+    candidate_set_id, number = role_id[1:].split("-")
+    candidate_set = db.get_candidate_set(candidate_set_id)
+    if candidate_set is None or int(number) > len(candidate_set["roles"]):
+        return None
+    return {**candidate_set["roles"][int(number) - 1], "id": role_id}
+
+
 def find_role_source(role_id: str):
     # プリセットのロールか、AIの候補から、元のロールを探す。なければ None
+    generated = find_generated_role(role_id)
+    if generated is not None:
+        return generated
     for role in (SEED_DATA.get("preset_roles") or {}).get("roles") or []:
         if role["id"] == role_id:
             return role
@@ -1445,10 +1677,16 @@ def chat(
     if not text or not chat_service.is_valid_conversation_id(conversation_id):
         raise HTTPException(status_code=400)
     existing = db.get_conversation(conversation_id)
+    if existing is not None and existing["student_id"] != current_student_id(request):
+        # ほかの人の会話には書き込ませない（#33）
+        raise HTTPException(status_code=403)
     material_set = conversation_material_set(request, existing)
     role = find_conversation_role(role_id, material_set) if role_id else None
     if role is None:
         raise HTTPException(status_code=400)
+    if existing is None and not can_start_conversation(request, material_set):
+        # 授業が終わった教材セットでは、新しい対話を始められない（#43）。始めていた会話は続けられる
+        raise HTTPException(status_code=403)
     # すでにある会話は、同じロールでしか続けられない（ほかのロールの会話に混ぜない）
     if existing is not None and existing["role_id"] != role["id"]:
         raise HTTPException(status_code=400)
@@ -1459,7 +1697,7 @@ def chat(
     material_set_id = existing["material_set_id"] if existing is not None else (
         request.cookies.get(MATERIAL_SET_COOKIE) if material_set is not None else None
     )
-    if not db.bind_conversation_context(conversation_id, role["id"], material_set_id):
+    if not db.bind_conversation_context(conversation_id, role["id"], material_set_id, current_student_id(request)):
         raise HTTPException(status_code=400)
 
     # 教材セットを選んでいれば、その使用範囲の本文だけを渡す（#44）

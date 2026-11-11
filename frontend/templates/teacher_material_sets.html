@@ -7,7 +7,6 @@
 {% set back_url = "/teacher" %}
 {% set new_url = "/teacher/materials" %}
 
-{# 授業の画面へのURL。URLを変えるときはここだけ直す #}
 {% macro lesson_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/lesson{% endmacro %}
 
 {% block title %}作成した教材セット | {% endblock %}
@@ -68,8 +67,12 @@
           </div>
 
           {# この教材セットで授業を始める。ボタンはカードの右下 #}
-          <div class="flex justify-end">
-            {{ btn_primary("授業を開始する", href=lesson_url(ms)) }}
+          <div class="flex flex-wrap justify-end gap-3">
+            {{ btn_secondary("授業の状態・終了", href=lesson_url(ms)) }}
+            <form action="{{ lesson_url(ms) }}/start" method="post">
+              <input type="hidden" name="show_chats" value="true">
+              {{ btn_primary("授業を開始する") }}
+            </form>
           </div>
         </section>
       </li>
