@@ -3,7 +3,7 @@
 
 {# 移動先は、ここだけで定義する #}
 {% set new_url = "/teacher/materials" %}
-{% macro edit_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/edit{% endmacro %}
+{# 「セットを編集」のボタンは、編集画面ができるまで出さない（移動先の /teacher/material-sets/{id}/edit は準備中の画面のため） #}
 {% macro lesson_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/lesson{% endmacro %}
 
 {% if selected is none %}
@@ -41,7 +41,6 @@
   {% endif %}
 
   <div class="mt-auto flex flex-wrap justify-end gap-3 pt-3">
-    <a href="{{ edit_url(selected) }}" class="inline-flex items-center min-h-[52px] px-6 border border-rose-line rounded-[10px] text-base font-bold text-crimson-dark hover:bg-rose-soft focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-crimson">セットを編集</a>
     <a href="{{ lesson_url(selected) }}" class="inline-flex items-center min-h-[52px] px-4 text-base font-bold text-crimson-dark underline">授業の状態・終了</a>
     <form action="{{ lesson_url(selected) }}/start" method="post">
       <input type="hidden" name="show_chats" value="true">

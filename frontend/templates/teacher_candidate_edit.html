@@ -5,8 +5,8 @@
 {# name_max・feature_max: 文字数の上限（main.py の ROLE_NAME_MAX など） #}
 {% extends "teacher_base.html" %}
 {% set nav_current = "materials" %}
-{# 教材の制作中は、生徒のチャット一覧へは行かない #}
-{% set hide_nav = ["chats"] %}
+{# 教材の制作中は、生徒のチャット一覧・感想の提出状況へは行かない #}
+{% set hide_nav = ["chats", "submissions"] %}
 
 {# 送信先は、ここだけで定義する #}
 {% set edit_url = "/teacher/candidates/" ~ (candidate.candidate_id | urlencode) ~ "/edit" %}
