@@ -1,0 +1,42 @@
+# Render の Blueprint（#38）。Render の画面で「New → Blueprint」からこのリポジトリを選ぶと、
+# Web サービス（アプリ）と Postgres（DB）がまとめて作られる
+# 秘密の値（sync: false）は、作るときに Render の画面で入力する。このファイルには書かない
+services:
+  - type: web
+    name: yomiyori
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # --proxy-headers：Render の中継（https）を正しく扱い、Google ログインの戻り先を https にする
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: yomiyori-db
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: TEACHER_CODE
+        sync: false
+      # ログイン状態を署名する鍵。Render がランダムな値を作る
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SESSION_HTTPS_ONLY
+        value: "1"
+      # 発表の前に、Gemini の上限に合わせて決める（chat.py の GLOBAL_LIMIT_PER_MINUTE）
+      - key: CHAT_LIMIT_PER_MINUTE
+        value: "10"
+
+databases:
+  - name: yomiyori-db
+    plan: free
+    databaseName: yomiyori
+    user: yomiyori

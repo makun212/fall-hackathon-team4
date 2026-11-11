@@ -161,12 +161,21 @@ def now():
     return datetime.now(timezone.utc)
 
 
+def database_url(url: str) -> str:
+    # Render などが渡す「postgres://」「postgresql://」の URL を、SQLAlchemy と psycopg（v3）で使える形にする
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def get_engine():
     # 最初に呼ばれたときに1回だけ作り、テーブルがなければ作る
     global _engine
     if _engine is None:
-        url = os.getenv("DATABASE_URL") or DEFAULT_DATABASE_URL
-        _engine = create_engine(url)
+        url = database_url(os.getenv("DATABASE_URL") or DEFAULT_DATABASE_URL)
+        # pool_pre_ping：本番の DB との接続が切れていても、使う前につなぎ直す
+        _engine = create_engine(url, pool_pre_ping=True)
         if url.startswith("sqlite"):
             # SQLite は、外部キーの確認を毎回オンにする必要がある
             event.listen(_engine, "connect", lambda conn, _: conn.execute("PRAGMA foreign_keys=ON"))
