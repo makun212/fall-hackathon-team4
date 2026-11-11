@@ -78,13 +78,13 @@
         {% endif %}
 
         {# 文字数は枠の中の右下に重ねる。罫線（ノートの線）は背景の繰り返しで描き、文字の行の高さ36pxにそろえる #}
-        {# 罫線をやめるときは、class の bg-[repeating-linear-gradient(…)] の1つを bg-none に置き換える #}
+        {# 罫線をやめるときは、class の ruled-lines を消す。罫線の位置は base.html の ruled-lines で決める #}
         {# placeholder は消さない（「送信する」の見た目の切り替えに :placeholder-shown を使っているため） #}
         <div class="relative">
           <textarea id="reflection" name="reflection" rows="5" required maxlength="{{ reflection_max_length }}"
                     placeholder="例：対話をして、〜について、考えが変わった（変わらなかった）。なぜなら、〜だからだ。"
                     aria-describedby="reflection-count reflection-note"
-                    class="block w-full min-h-[190px] resize-y px-[18px] pt-2.5 pb-11 text-base leading-9 text-sepia bg-cream-paper bg-local bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_35px,var(--color-cream-line)_35px,var(--color-cream-line)_36px)] border border-cream-line rounded-[10px] placeholder:text-sepia-muted/85 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:border-crimson">{{ reflection }}</textarea>
+                    class="block w-full min-h-[190px] resize-y px-[18px] pt-2.5 pb-11 text-base leading-9 text-sepia bg-cream-paper ruled-lines border border-cream-line rounded-[10px] placeholder:text-sepia-muted/85 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:border-crimson">{{ reflection }}</textarea>
           <p id="reflection-count" class="absolute right-[18px] bottom-3 m-0 text-[13px] text-sepia-muted tabular-nums pointer-events-none"><span id="reflection-count-now">0</span> / {{ reflection_max_length }}文字</p>
         </div>
       </section>
