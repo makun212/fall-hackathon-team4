@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import db  # noqa: E402
 import main  # noqa: E402
+from auth_helper import login  # noqa: E402
 
 CONVERSATION_ID = "b" * 32
 
@@ -21,6 +22,17 @@ class TeacherSubmissionTests(unittest.TestCase):
     def setUp(self):
         db.use_engine(create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}))
         self.app = TestClient(main.app)
+        login(self.app, role="teacher")
+
+    def test_only_teachers_can_view_submissions(self):
+        anonymous = TestClient(main.app)
+        response = anonymous.get("/teacher/submissions", follow_redirects=False)
+        self.assertEqual(303, response.status_code)
+        self.assertEqual("/teacher/login", response.headers["location"])
+        login(anonymous, role="student", user_id="test:student")
+        response = anonymous.get("/teacher/submissions", follow_redirects=False)
+        self.assertEqual(303, response.status_code)
+        self.assertIn("/teacher/login", response.headers["location"])
 
     def test_seed_reflection_is_submitted(self):
         status = main.get_submission_status()

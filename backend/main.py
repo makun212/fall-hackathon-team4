@@ -1294,10 +1294,12 @@ def teacher_lesson(request: Request, material_set_id: str):
 
 # 教師用：授業の開始・終了（#43）。終わったら授業の画面に戻る
 @app.post("/teacher/material-sets/{material_set_id}/lesson/start")
-def teacher_lesson_start(request: Request, material_set_id: str):
+def teacher_lesson_start(request: Request, material_set_id: str, show_chats: bool = Form(False)):
     if material_set_id not in {s["id"] for s in get_confirmed_material_sets()}:
         raise HTTPException(status_code=404, detail="教材セットが見つかりません")
     db.start_lesson(material_set_id, current_student_id(request))
+    if show_chats:
+        return RedirectResponse("/teacher/chats", status_code=303)
     return RedirectResponse(f"/teacher/material-sets/{material_set_id}/lesson", status_code=303)
 
 
@@ -1353,7 +1355,7 @@ def teacher_chat_detail(request: Request, conversation_id: str):
 
 
 # 教師用：感想の提出状況。会話を始めた生徒を、提出済みと未提出に分けて見せる
-# TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
+# 権限は auth.access_control で確認する。
 @app.get("/teacher/submissions", response_class=HTMLResponse)
 def teacher_submissions(request: Request):
     status = get_submission_status()

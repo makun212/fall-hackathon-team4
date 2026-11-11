@@ -6,10 +6,10 @@ services:
     name: yomiyori
     runtime: python
     plan: free
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    # リポジトリ全体を使う。backend を rootDir にすると、兄弟の frontend が実行環境から見えなくなる
+    buildCommand: pip install -r backend/requirements.txt
     # --proxy-headers：Render の中継（https）を正しく扱い、Google ログインの戻り先を https にする
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    startCommand: uvicorn main:app --app-dir backend --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION

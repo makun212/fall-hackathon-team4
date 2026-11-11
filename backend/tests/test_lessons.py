@@ -68,6 +68,18 @@ class LessonTests(unittest.TestCase):
         self.assertIn("book-ms001", self.student.get("/student").text)
         self.assertEqual({"ms001"}, db.open_lesson_set_ids())
 
+    def test_start_from_material_shelf_opens_lesson_before_showing_chats(self):
+        for path in ["/teacher", "/teacher/material-sets"]:
+            page = self.teacher.get(path)
+            self.assertIn(f'action="{LESSON}/start"', page.text)
+            self.assertIn('name="show_chats" value="true"', page.text)
+            self.assertIn(f'href="{LESSON}"', page.text)
+        response = self.teacher.post(f"{LESSON}/start", data={"show_chats": "true"}, follow_redirects=False)
+        self.assertEqual(303, response.status_code)
+        self.assertEqual("/teacher/chats", response.headers["location"])
+        self.assertIn("book-ms001", self.student.get("/student").text)
+        self.assertEqual(200, self.teacher.get(response.headers["location"]).status_code)
+
     def test_submissions_are_listed(self):
         self.teacher.post(f"{LESSON}/start")
         conversation_id = self.student_starts()
