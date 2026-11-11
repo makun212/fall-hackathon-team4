@@ -81,9 +81,9 @@
 
 CSSファイルは作らないルールは、教師用の画面でも同じです（縦書きや持ち上がりも class で書いています）。
 
-## 生徒の画面の例外（ロール選択・問いかけ・チャット）
+## 生徒の画面の例外（ロール選択・問いかけ・チャット・ログイン）
 
-`role_select.html`・`student_question.html`・`index.html`（チャット）は、それぞれの見た目の基準HTMLに合わせて、上のルールの例外として次を使います。
+`role_select.html`・`student_question.html`・`index.html`（チャット）・`login.html`（教師用・生徒用で共用のログイン、見た目の基準は「生徒用ログイン L2」）は、それぞれの見た目の基準HTMLに合わせて、上のルールの例外として次を使います。
 
 - 色：教師用の画面と同じ `crimson`、`kinari`、`cream`、`gold` など。チャットの「送信」の書く前の色（`#D9CDB8`・`#C9B99C`）と入力欄の placeholder（`#7A6A58`）だけは、基準HTMLの値を直書きしている
 - 文字：Google Fonts の Noto Sans JP（本文）／Noto Serif JP（題名・見出し）を、その画面の `head` ブロックで読み込む
