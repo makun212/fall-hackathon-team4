@@ -61,6 +61,31 @@
 </div>
 {% endmacro %}
 
+{# 生徒のチャット画面のロールの丸（深紅の丸に頭文字）。画像があれば上に重ね、読み込めなければ画像だけ消す #}
+{% macro chat_avatar(text, image=None) %}
+<span class="relative flex-none flex items-center justify-center size-9 overflow-hidden rounded-full bg-crimson font-['Noto_Serif_JP',serif] text-[15px] font-bold text-kinari" aria-hidden="true">
+  {{ text }}
+  {% if image %}
+    <img src="/static/{{ image }}" alt="" class="absolute inset-0 size-full object-cover" onerror="this.remove()">
+  {% endif %}
+</span>
+{% endmacro %}
+
+{# 生徒のチャット画面の発言1件（見た目の基準は「チャットC1」の .ch-msg）。kind は "ai"（相手・左寄せ）か "me"（自分・右寄せ） #}
+{# 自分と相手は、位置・ラベル・吹き出しの角（しっぽの向き）で区別する。本文は自動エスケープのまま出し、改行は保つ #}
+{# 吹き出しの下に足したいもの（根拠のボタンなど）は {% call %} で渡す #}
+{% macro chat_msg(kind, who, text, avatar_text=None, image=None) %}
+{% set is_me = kind == "me" %}
+<div class="ch-msg ch-msg--{{ 'me' if is_me else 'ai' }} flex items-start gap-2.5{{ ' flex-row-reverse' if is_me }}">
+  {% if not is_me %}{{ chat_avatar(avatar_text, image) }}{% endif %}
+  <div class="min-w-0 max-w-[76%] max-sm:max-w-[86%] flex flex-col gap-1 {{ 'items-end' if is_me else 'items-start' }}">
+    <span class="text-xs font-bold text-crimson-dark">{{ who }}</span>
+    <p class="m-0 px-4 py-3 border border-gold text-base leading-[1.8] text-sepia whitespace-pre-wrap [overflow-wrap:anywhere] {{ 'bg-cream-paper rounded-[14px_4px_14px_14px]' if is_me else 'bg-kinari rounded-[4px_14px_14px_14px]' }}">{{ text }}</p>
+    {% if caller %}{{ caller() }}{% endif %}
+  </div>
+</div>
+{% endmacro %}
+
 {# 小さなラベル。kind は "default" / "accent" / "warning" #}
 {% macro badge(text, kind="default") %}
 {% set styles = {

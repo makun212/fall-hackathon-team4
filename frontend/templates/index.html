@@ -1,6 +1,9 @@
-{# 生徒のチャット画面。role は main.py から渡す（ロール選択画面から来たときだけ） #}
+{# 生徒のチャット画面（チャットC1 便りのやりとり）。role は main.py から渡す（ロール選択画面から来たときだけ） #}
+{# 見た目の基準は「チャットC1」の静的HTML。CSSファイルは作らず、基準HTMLの CSS を Tailwind のクラスに置き換えている #}
+{# 配色は base.html の @theme の名前で書いている（深紅 crimson／濃い赤 crimson-dark／生成り kinari／背景 cream／紙の白 cream-paper／金 gold／文字 sepia／補助文字 sepia-muted／線 cream-line） #}
+{# 「送信」の見た目の切り替えは CSS だけ（form の group/form と、textarea の :placeholder-shown）。:has() 非対応のブラウザでは、常に薄い色のままになるだけで、送信は壊れない #}
 {% extends "base.html" %}
-{% from "_components.html" import btn_primary, btn_secondary, avatar %}
+{% from "_components.html" import chat_avatar %}
 
 {# ロールのキー名を参照するのはここだけ。項目が変わったらここを直す #}
 {% set role_name = role["name"] if role else None %}
@@ -12,84 +15,118 @@
 
 {% block title %}チャット | {% endblock %}
 
+{% block head %}
+{# 書体：本文は Noto Sans JP、題名・見出しは Noto Serif JP（問いかけ画面と同じ） #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{% endblock %}
+
+{% block body_class %}bg-cream text-sepia{% endblock %}
+
+{# 上部バー：base.html のヘッダーと同じ中身（リンク先も同じ）で、背景を紙の白、下線を深紅にする（role_select.html と同じ） #}
+{% block header %}
+<header class="bg-cream-paper border-b-2 border-crimson text-sepia">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8">
+    <a href="/" class="inline-flex items-center min-h-14 font-['Noto_Serif_JP',serif] text-lg font-bold tracking-[0.08em] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">よみより</a>
+  </div>
+</header>
+{% endblock %}
+
 {% block content %}
-{# チャット画面は、ウィンドウの高さにちょうど収める。上のロール表示と下の入力欄は動かさず、間のやり取りだけをスクロールする #}
-{# 高さは「画面の高さ − base.html のヘッダー（58px）− main の上の余白（24px）− 下の余白（-mb-2 で 16px に詰める）」。base.html の余白を変えたらここも直す #}
-<div class="flex flex-col md:flex-row gap-6 h-[calc(100dvh-6.125rem)] -mb-2">
-  <section class="flex-1 min-w-0 min-h-0 flex flex-col">
-    {# 話している相手。ロールがないときは何も出さない #}
+{# 会話の列は最大816px（基準HTMLの880px − 左右の余白）。根拠パネルは、1024px以上では右、それより狭いと会話の下に出る #}
+{# main の左右の余白は32px。640px未満は、左右を16px広げて余白を16pxにする #}
+<div class="max-sm:-mx-4 flex flex-col lg:flex-row lg:items-start gap-6 font-['Noto_Sans_JP',sans-serif] text-base leading-normal text-sepia">
+  <section class="flex-1 min-w-0 w-full max-w-[816px] mx-auto flex flex-col gap-4">
+    {# 話している相手と、終了ボタン。ロールがないときは何も出さない #}
     {% if role_name %}
-      <div class="shrink-0 mb-4 pb-3 border-b border-line flex flex-wrap items-center gap-3">
-        {{ avatar(role_name[:1], role_image) }}
-        <div class="min-w-0 flex-1">
-          <h1 class="text-xl font-bold leading-snug">{{ role_name }}と対話中</h1>
-          {% if role_summary %}
-            <p class="text-base text-muted leading-snug">{{ role_summary }}</p>
-          {% endif %}
+      <div class="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 pb-3.5 border-b border-cream-line">
+        <div class="flex items-center gap-3 min-w-0">
+          {{ chat_avatar(role_name[:1], role_image) }}
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <h1 class="m-0 font-['Noto_Serif_JP',serif] text-[17px] font-bold leading-normal [overflow-wrap:anywhere]">{{ role_name }}と対話中</h1>
+            {% if role_summary %}
+              <p class="m-0 text-[13px] leading-[1.6] text-sepia-muted">{{ role_summary }}</p>
+            {% endif %}
+          </div>
         </div>
         {% if reflection_url %}
-          <div class="ml-auto shrink-0">{{ btn_secondary("対話を終えて、感想を書く", href=reflection_url) }}</div>
+          <a href="{{ reflection_url }}" class="inline-flex items-center justify-center min-h-12 px-[22px] max-sm:w-full rounded-[10px] border border-rose-line bg-cream-paper text-center text-[15px] font-bold text-crimson-dark hover:bg-kinari focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink">対話を終えて、感想を書く</a>
         {% endif %}
       </div>
     {% else %}
       <h1 class="sr-only">チャット</h1>
     {% endif %}
 
-    {# やり取りの枠。ここだけスクロールし、新しい発言が来たら自動で一番下まで進む #}
-    <div id="chat-scroll" tabindex="0" aria-label="会話の履歴"
-         class="flex-1 min-h-0 overflow-y-scroll [scrollbar-gutter:stable] p-4 bg-paper border border-line rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-      <div id="chat" class="flex flex-col gap-4" aria-live="polite"></div>
+    {# 会話の欄。高さは固定（640px以下は画面の56%）で、中だけスクロールする。新しい発言が来たら hx-swap の scroll で一番下まで進む #}
+    {# キーボードでもスクロールできるよう tabindex を付けている #}
+    <div id="chat-scroll" tabindex="0" aria-label="対話の記録（スクロールできます）"
+         class="h-[400px] max-sm:h-[56vh] max-sm:min-h-[300px] overflow-y-auto [scrollbar-gutter:stable] p-5 max-sm:p-3.5 bg-cream-paper border border-cream-line rounded-xl focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink">
+      {# 発言の追加先。1件の見た目は _components.html の chat_msg #}
+      <div id="chat" class="flex flex-col gap-[18px]" role="log" aria-live="polite" aria-label="対話の記録"></div>
+
+      {# まだ発言がないときだけ出る案内（#chat が空のとき）。送信中は消す #}
+      <p class="hidden [#chat:empty+&]:flex [#chat-scroll:has(#typing.htmx-request)_&]:hidden h-full items-center justify-center m-0 text-center text-sm text-sepia-muted">下の入力欄から、あなたの考えを送ってみよう</p>
 
       {# 返事を待つ間だけ出る吹き出し。htmx が送信中に htmx-request を付け、返事が来たら外す #}
-      {# 見た目は _message.html の相手の吹き出しとそろえる #}
-      <div id="typing" class="hidden [&.htmx-request]:flex items-start gap-3 mt-4" role="status">
-        {{ avatar(role_name[:1] if role_name else "AI", role_image) }}
-        <p class="mt-8 inline-flex items-center gap-2 px-4 py-2 bg-paper border border-line rounded-2xl rounded-tl-sm text-muted">
+      {# 見た目は chat_msg の相手の吹き出しとそろえる #}
+      <div id="typing" class="hidden [&.htmx-request]:flex items-start gap-2.5 mt-[18px] [#chat:empty~&]:mt-0" role="status">
+        {{ chat_avatar(role_name[:1] if role_name else "AI", role_image) }}
+        <p class="m-0 inline-flex items-center gap-2 px-4 py-3 bg-kinari border border-gold rounded-[4px_14px_14px_14px] text-[15px] text-sepia-muted">
           {{ role_name ~ "が考えています" if role_name else "AIが考えています" }}
           <span class="inline-flex gap-1" aria-hidden="true">
-            <span class="size-1.5 rounded-full bg-muted animate-pulse motion-reduce:animate-none"></span>
-            <span class="size-1.5 rounded-full bg-muted animate-pulse motion-reduce:animate-none [animation-delay:300ms]"></span>
-            <span class="size-1.5 rounded-full bg-muted animate-pulse motion-reduce:animate-none [animation-delay:600ms]"></span>
+            <span class="size-1.5 rounded-full bg-crimson-dark animate-pulse motion-reduce:animate-none"></span>
+            <span class="size-1.5 rounded-full bg-crimson-dark animate-pulse motion-reduce:animate-none [animation-delay:300ms]"></span>
+            <span class="size-1.5 rounded-full bg-crimson-dark animate-pulse motion-reduce:animate-none [animation-delay:600ms]"></span>
           </span>
           <span class="sr-only">…</span>
         </p>
       </div>
     </div>
 
-    {# エラーを出す場所。文章は下の script が固定の文から選んで入れる #}
-    <div id="chat-error" hidden role="alert" class="shrink-0 flex items-start gap-3 mt-4 px-4 py-3 bg-accent-soft border border-accent rounded-lg text-ink">
-      <span class="shrink-0 inline-flex items-center justify-center size-6 rounded-full bg-accent text-paper text-base font-bold" aria-hidden="true">！</span>
-      <p id="chat-error-text"></p>
+    {# エラーを出す場所。文章は下の script が固定の文から選んで入れる（問いかけ画面のエラーと同じ見た目） #}
+    <div id="chat-error" hidden role="alert" class="flex items-start gap-3 px-4 py-2.5 bg-rose-soft border border-crimson rounded-[10px] text-sepia">
+      <span class="shrink-0 inline-flex items-center justify-center size-6 mt-0.5 rounded-full bg-crimson text-cream-paper text-base font-bold" aria-hidden="true">！</span>
+      <p id="chat-error-text" class="m-0 leading-[1.7]"></p>
     </div>
 
     {# 失敗したときは入力を消さない（成功したときだけ reset する） #}
+    {# hx-disabled-elt="find button" は、フォームの中の最初の button（送信）を指す。フォームの中に別の button を先に置かないこと #}
     <form id="chat-form" hx-post="/chat" hx-target="#chat" hx-swap="beforeend scroll:#chat-scroll:bottom"
           hx-indicator="#typing" hx-disabled-elt="find button"
           hx-request='{"timeout": 30000}'
-          class="shrink-0 flex flex-col gap-1 mt-4">
-      <label for="chat-message" class="sr-only">メッセージ</label>
+          class="group/form flex flex-col gap-1.5">
       {# 返事の吹き出しに相手のアイコンを出すため、ロールも一緒に送る #}
       {% if role_id %}<input type="hidden" name="role_id" value="{{ role_id }}">{% endif %}
       {# 会話の ID。AI が前のやり取りを覚えておくために使う（main.py の student_chat で作る） #}
       {% if conversation_id %}<input type="hidden" name="conversation_id" value="{{ conversation_id }}">{% endif %}
-      <div class="flex gap-3">
-        <input id="chat-message" name="message" required maxlength="200" autocomplete="off"
-               placeholder="選んだ立場のAIに話しかけてみよう" aria-describedby="chat-count"
-               class="flex-1 min-w-0 min-h-12 px-4 bg-paper border border-line rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-        {{ btn_primary("送信", busy_label="送信中…") }}
+      <div class="flex flex-wrap items-end gap-2.5">
+        <div class="flex-[1_1_300px] max-sm:basis-full min-w-0">
+          <label for="chat-message" class="sr-only">メッセージ</label>
+          {# Enter は改行。送信は「送信」ボタンで行う #}
+          {# placeholder は消さない（「送信」の見た目の切り替えに :placeholder-shown を使っているため） #}
+          <textarea id="chat-message" name="message" rows="2" required maxlength="200" autocomplete="off"
+                    placeholder="選んだ立場のAIに話しかけてみよう" aria-describedby="chat-count"
+                    class="block w-full resize-none px-4 py-3 text-base leading-[1.6] text-sepia bg-cream-paper border border-cream-line rounded-[10px] placeholder:text-[#7A6A58] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:border-crimson"></textarea>
+        </div>
+        {# disabled は送信中だけ（htmx の hx-disabled-elt が付け外しする）。何も書かずに押すと、textarea の required でブラウザが止める #}
+        {# 書く前は薄い色、書いたら深紅。送信中は「送信中…」に切り替わる #}
+        <button type="submit" class="group min-h-[52px] max-sm:w-full px-[30px] rounded-[10px] border-0 border-b-3 border-[#C9B99C] bg-[#D9CDB8] text-base font-bold tracking-[0.08em] text-sepia-muted cursor-pointer focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink group-has-[textarea:not(:placeholder-shown)]/form:border-gold group-has-[textarea:not(:placeholder-shown)]/form:bg-crimson group-has-[textarea:not(:placeholder-shown)]/form:text-white disabled:opacity-60 disabled:cursor-not-allowed"><span class="group-disabled:hidden">送信</span><span class="hidden group-disabled:inline">送信中…</span></button>
       </div>
-      <p id="chat-count" class="self-end text-base text-muted"><span id="chat-count-now">0</span> / 200文字</p>
+      <p id="chat-count" class="self-end m-0 text-[13px] text-sepia-muted tabular-nums"><span id="chat-count-now">0</span> / 200文字</p>
     </form>
   </section>
 
   {# 根拠パネル。「根拠を表示する」を押したときだけ出る #}
   <aside id="evidence-panel" hidden aria-labelledby="evidence-title"
-         class="md:w-80 lg:w-96 shrink-0 max-h-[50%] md:max-h-none overflow-y-auto flex flex-col gap-4 p-4 bg-paper border border-line rounded-lg">
+         class="w-full max-w-[816px] mx-auto lg:mx-0 lg:w-80 lg:shrink-0 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] overflow-y-auto flex flex-col gap-4 p-5 bg-cream-paper border border-cream-line rounded-xl">
     <div class="flex items-center justify-between gap-3">
-      <h2 id="evidence-title" tabindex="-1" class="text-xl font-bold focus:outline-none">根拠</h2>
-      <div data-evidence-close>{{ btn_secondary("閉じる") }}</div>
+      <h2 id="evidence-title" tabindex="-1" class="m-0 font-['Noto_Serif_JP',serif] text-[17px] font-bold focus:outline-none">根拠</h2>
+      <div data-evidence-close>
+        <button type="button" class="inline-flex items-center justify-center min-h-11 px-4 rounded-[10px] border border-rose-line bg-cream-paper text-sm font-bold text-crimson-dark cursor-pointer hover:bg-kinari focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink">閉じる</button>
+      </div>
     </div>
-    <p class="-mt-2 text-base text-muted">AIの返事のもとになった本文です</p>
+    <p class="-mt-2 mb-0 text-[13px] text-sepia-muted">AIの返事のもとになった本文です</p>
     <div id="evidence-body"></div>
   </aside>
 </div>
@@ -112,9 +149,13 @@
     form.addEventListener("htmx:beforeRequest", () => setTimeout(scrollToBottom));
 
     // ---- 文字数の表示 ----
+    // 180字以上で濃い赤・太字にする（問いかけ画面と同じ）
     const updateCount = () => {
+      const near = input.value.length >= 180;
       count.textContent = input.value.length;
-      count.parentElement.classList.toggle("text-warning", input.value.length >= 180);
+      count.parentElement.classList.toggle("text-crimson-dark", near);
+      count.parentElement.classList.toggle("font-bold", near);
+      count.parentElement.classList.toggle("text-sepia-muted", !near);
     };
     input.addEventListener("input", updateCount);
 
