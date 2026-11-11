@@ -20,6 +20,7 @@ from sqlalchemy import (
     select,
     update,
 )
+from sqlalchemy.exc import IntegrityError
 
 # DB（#12）。テーブルの定義と、DBへの接続はこのファイルにまとめる
 # 手元では backend/app.db（SQLite）を使う。本番では .env の DATABASE_URL に Postgres などの接続先を書く
@@ -40,6 +41,14 @@ conversations = Table(
     Column("reflection", Text),  # 対話後の感想（#46）。一度保存したら書き換えない
     Column("reflected_at", DateTime(timezone=True)),
     Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+# 新しい経路で本文範囲を固定したことの記録。旧会話のNULLが「全文」か保存漏れかは推測しない。
+# create_allで追加できる独立テーブルにし、既存テーブル・行の書き換えは不要にする。
+conversation_contexts = Table(
+    "conversation_contexts",
+    metadata,
+    Column("conversation_id", String(32), ForeignKey("conversations.id"), primary_key=True),
 )
 
 # 会話の中の発言。role は user（生徒）か assistant（AI）
@@ -135,6 +144,7 @@ def create_conversation(conversation_id: str, role_id: str, pre_opinion: str, ma
                 created_at=now(),
             )
         )
+        conn.execute(insert(conversation_contexts).values(conversation_id=conversation_id))
 
 
 def get_conversation(conversation_id: str):
@@ -142,6 +152,42 @@ def get_conversation(conversation_id: str):
     with get_engine().connect() as conn:
         row = conn.execute(select(conversations).where(conversations.c.id == conversation_id)).first()
     return dict(row._mapping) if row else None
+
+
+def has_conversation_context(conversation_id: str) -> bool:
+    with get_engine().connect() as conn:
+        return conn.execute(
+            select(conversation_contexts.c.conversation_id).where(conversation_contexts.c.conversation_id == conversation_id)
+        ).first() is not None
+
+
+def bind_conversation_context(conversation_id: str, role_id: str, material_set_id: str | None) -> bool:
+    # 初回の直接POSTでも、AIを呼ぶ前に会話のロールと教材セットをDBに固定する。
+    # 既存の会話を書き換えず、同じ文脈の要求だけを許す。固定記録のあるNoneだけが全文を表す。
+    def matches(row):
+        return row["role_id"] == role_id and row["material_set_id"] == material_set_id
+
+    try:
+        with get_engine().begin() as conn:
+            row = conn.execute(select(conversations).where(conversations.c.id == conversation_id)).mappings().first()
+            if row is not None:
+                scope_known = row["material_set_id"] is not None or conn.execute(
+                    select(conversation_contexts.c.conversation_id).where(conversation_contexts.c.conversation_id == conversation_id)
+                ).first() is not None
+                return scope_known and matches(row)
+            conn.execute(
+                insert(conversations).values(
+                    id=conversation_id, role_id=role_id, material_set_id=material_set_id, created_at=now()
+                )
+            )
+            conn.execute(insert(conversation_contexts).values(conversation_id=conversation_id))
+        return True
+    except IntegrityError:
+        # 同じ未使用IDへの同時送信は、先に保存された文脈と再照合する。
+        existing = get_conversation(conversation_id)
+        if existing is None:
+            raise
+        return matches(existing) and (existing["material_set_id"] is not None or has_conversation_context(conversation_id))
 
 
 def save_reflection(conversation_id: str, reflection: str) -> bool:

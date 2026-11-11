@@ -1,0 +1,45 @@
+{
+  "issue": 17,
+  "status": "not_run_waiting_for_issue_16",
+  "cases": [
+    {
+      "id": "maihime",
+      "domain": "国語",
+      "title": "舞姫",
+      "source_url": "https://www.aozora.gr.jp/cards/000129/card2078.html",
+      "input_source": "backend/data/preparation/maihime_material.json",
+      "range": "第40〜50段落。保存済み本文から取り出す。",
+      "review_points": [
+        "豊太郎の葛藤、エリスへの責任、社会的制約など、視点が同じ賛否だけに偏っていないか",
+        "範囲外の段落を今回の本文の根拠と称していないか",
+        "登場人物の内心の創作や、実在しない学説・出典がないか"
+      ]
+    },
+    {
+      "id": "rashomon",
+      "domain": "国語",
+      "title": "羅生門",
+      "source_url": "https://www.aozora.gr.jp/cards/000879/files/127_15260.html",
+      "input_source": "青空文庫の実際の本文を担当者が確認して指定する。seed_dummy_data.jsonのダミー本文は評価に使わない。",
+      "range": "下人が門の下で暮らしを考える冒頭部分。正確な範囲は実本文取り込み後に固定する。",
+      "review_points": [
+        "生存の必要と他者への加害、判断の変化など、複数の観点があるか",
+        "語り手の説明と人物自身の正当化を混同していないか",
+        "未提供の後半や結末を指定範囲にある根拠と称していないか"
+      ]
+    },
+    {
+      "id": "national_assembly_petition",
+      "domain": "歴史",
+      "title": "1880年の国会開設請願",
+      "source_url": "https://www.ndl.go.jp/modern/cha1/description13.html",
+      "input_source": "国立国会図書館『国会期成同盟の請願』の解説と掲載史料を参照し、提供する本文・範囲を担当者と固定する。",
+      "range": "1880年の請願の経緯。アプリへの歴史教材登録は別途調整が必要。",
+      "review_points": [
+        "請願を進める側、受理・制度整備を検討する側、参加の範囲を問う側など、異なる立場があるか",
+        "請願の提出と国会の実際の開設を混同していないか",
+        "当時の人物に後世の知識を語らせたり、現代の価値観だけで断定していないか"
+      ]
+    }
+  ]
+}

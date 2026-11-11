@@ -1,5 +1,5 @@
 {
-    "preparation_status":  "未接続の準備用データ。概要の保存先はmaterial.opening_previewに確定済み。行番号はIssue #44との調整まで保留。章番号は未定義。DB登録は未実施。",
+    "preparation_status":  "PR #70でアプリに接続済み。概要はmaterial.opening_preview。行番号はcontent.pyの既存の40字換算による仮番号を明示して保存。章番号は未定義。教材マスターのDB登録は未実施。",
     "source":  {
                    "card_url":  "https://www.aozora.gr.jp/cards/000129/card2078.html",
                    "text_url":  "https://www.aozora.gr.jp/cards/000129/files/2078_15963.html",
@@ -25,7 +25,7 @@
 
                                                ],
                        "indentation_preserved":  true,
-                       "line_number_definition":  "未確定",
+                       "line_number_definition":  "content.pyと同じ仮番号。段落のtext.strip()のPython文字数を40字で切り上げ、最低1行。段落間で改行分を加算しない。外字の目印は保存文字列の長さで数える。教科書・青空文庫の正式な行番号ではない。",
                        "summary_storage":  "material.opening_preview"
                    },
     "ending_date":  {
