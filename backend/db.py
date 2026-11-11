@@ -12,6 +12,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    UniqueConstraint,
     Text,
     create_engine,
     event,
@@ -85,6 +86,20 @@ detections = Table(
     Column("type", String(32), nullable=False),
     Column("level", String(16), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+# AI が作った立場の候補（#16）。教材と範囲（第何段落から何段落まで）ごとに1回だけ作り、使い回す
+# roles は [{name, summary, features, basis, prompt_hint}]。候補の ID は candidates.candidate_id() で作る
+candidate_sets = Table(
+    "candidate_sets",
+    metadata,
+    Column("id", String(32), primary_key=True),
+    Column("material_id", String(64), nullable=False),
+    Column("range_start", Integer, nullable=False),
+    Column("range_end", Integer, nullable=False),
+    Column("roles", JSON, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint("material_id", "range_start", "range_end"),
 )
 
 # 教師がロールの編集画面で保存した内容（#13）。name が None なら「元に戻した」
@@ -428,3 +443,45 @@ def read_user_names():
     # {ユーザーの id: 名前}。教師のチャット一覧で、生徒の名前を出すのに使う
     with get_engine().connect() as conn:
         return {r.id: r.name or r.email or "名前なし" for r in conn.execute(select(users.c.id, users.c.name, users.c.email))}
+
+
+# ---- AI が作った立場の候補（#16） ----
+
+
+def find_candidate_set(material_id: str, range_start: int, range_end: int):
+    # 教材と範囲の候補のまとまりを返す。まだ作っていなければ None
+    with get_engine().connect() as conn:
+        row = conn.execute(
+            select(candidate_sets).where(
+                candidate_sets.c.material_id == material_id,
+                candidate_sets.c.range_start == range_start,
+                candidate_sets.c.range_end == range_end,
+            )
+        ).first()
+    return dict(row._mapping) if row else None
+
+
+def save_candidate_set(candidate_set_id: str, material_id: str, range_start: int, range_end: int, roles):
+    # 候補を保存して、保存されている候補のまとまりを返す
+    # 同じ教材・範囲を同時に作ったときは、先に保存されたほうを使う
+    try:
+        with get_engine().begin() as conn:
+            conn.execute(
+                insert(candidate_sets).values(
+                    id=candidate_set_id,
+                    material_id=material_id,
+                    range_start=range_start,
+                    range_end=range_end,
+                    roles=roles,
+                    created_at=now(),
+                )
+            )
+    except IntegrityError:
+        pass
+    return find_candidate_set(material_id, range_start, range_end)
+
+
+def get_candidate_set(candidate_set_id: str):
+    with get_engine().connect() as conn:
+        row = conn.execute(select(candidate_sets).where(candidate_sets.c.id == candidate_set_id)).first()
+    return dict(row._mapping) if row else None

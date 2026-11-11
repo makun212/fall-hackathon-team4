@@ -102,12 +102,17 @@ def generate(system_prompt: str, messages) -> str:
     return call_gemini(system_prompt, messages)
 
 
-def generate_json(system_prompt: str, messages, schema: dict):
+def generate_json(system_prompt: str, messages, schema: dict, timeout_seconds: int | None = None):
     # schema（JSON Schema）の形の JSON を、Python の値にして返す。立場の候補（#16）や根拠（#45）で使う
     text = call_gemini(
         system_prompt,
         messages,
-        {"response_mime_type": "application/json", "response_json_schema": schema},
+        {
+            "response_mime_type": "application/json",
+            "response_json_schema": schema,
+            # 長い出力（立場の候補6つなど）は、待つ時間を延ばせるようにする。指定しなければ TIMEOUT_SECONDS
+            **({"http_options": types.HttpOptions(timeout=timeout_seconds * 1000)} if timeout_seconds else {}),
+        },
     )
     try:
         return json.loads(text)

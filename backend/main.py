@@ -1,6 +1,5 @@
 import json
 import re
-import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
@@ -12,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 import auth
+import candidates as candidate_service
 import chat as chat_service
 import db
 from ai import AIBusyError, AIError
@@ -516,8 +516,10 @@ def find_static_image(path):
 
 
 # ダミー。AIの候補生成と、保存した編集内容に、あとで差し替える
-def get_role_candidates(material_id: str):
+def get_role_candidates(material_id: str, range_type: str = "all", start: str = "", end: str = ""):
     # 教材の候補を、同じ形の辞書のリストで返す（最大6つ）。候補のキー名を参照するのはここだけ
+    # 舞姫は、厚樹さんが根拠まで確かめたプリセットを使う。ほかの教材は、範囲の本文から AI が作る（#16）
+    # AI が作れなかったときは ai.AIError（呼び出し側で画面にエラーを出す）
     # 形: candidate_id、name、summary、features（文字列のリスト）、image（なければ None）、edited（True / False）、
     #     original（元のAIの案。編集を適用する前の、編集できる項目 {"name", "features"}）
     # summary（立場の一言）は編集できないため、いつもAIの元の値
@@ -536,7 +538,8 @@ def get_role_candidates(material_id: str):
             for r in preset.get("roles") or []
         ]
     else:
-        candidates = []
+        candidates = generated_candidates(material_id, range_type, start, end)
+    if not candidates:
         for group in SEED_DATA.get("role_candidates") or []:
             if group.get("material_id") != material_id:
                 continue
@@ -978,11 +981,18 @@ def teacher_candidates(
         return RedirectResponse("/teacher/materials", status_code=303)
     material, range_type, start, end = resolved
 
-    # ダミーの待ち時間。AI接続後に削除する（待ち時間の表示の動作確認用）。戻ってきたとき（back=1）は待たせない
-    if back != "1":
-        time.sleep(2)
-
-    candidates = get_role_candidates(material["id"])
+    try:
+        candidates = get_role_candidates(material["id"], range_type, start, end)
+    except AIBusyError:
+        return render_teacher_materials(
+            request, material, range_type, start, end,
+            error="AIが混み合っています。少し待ってから、もう一度「次へ」を押してください。", status_code=429,
+        )
+    except AIError:
+        return render_teacher_materials(
+            request, material, range_type, start, end,
+            error="AIが立場の候補を作れませんでした。もう一度「次へ」を押してください。", status_code=502,
+        )
     return render_teacher_candidates(
         request, material, range_type, start, end, candidates, filter_selected(candidates, selected)
     )
@@ -1004,7 +1014,7 @@ def teacher_candidates_confirm(
         return RedirectResponse("/teacher/materials", status_code=303)
     material, range_type, start, end = resolved
 
-    candidates = get_role_candidates(material["id"])
+    candidates = get_role_candidates(material["id"], range_type, start, end)
     selected_ids = filter_selected(candidates, selected)
     error = None
     if not selected:
@@ -1064,7 +1074,7 @@ def resolve_candidate_edit_request(candidate_id: str, material_id: str, range_ty
     if resolved is None:
         return None
     material, range_type, start, end = resolved
-    candidates = get_role_candidates(material["id"])
+    candidates = get_role_candidates(material["id"], range_type, start, end)
     candidate = next((c for c in candidates if c["candidate_id"] == candidate_id), None)
     if candidate is None:
         raise HTTPException(status_code=404, detail="ロールの候補が見つかりません")
@@ -1381,8 +1391,47 @@ def get_paragraph_labels():
     }
 
 
+def generated_candidates(material_id: str, range_type: str, start: str, end: str):
+    # AI が作った候補（#16）を、画面の候補の形にする。教材と範囲ごとに1回だけ作り、DB から使い回す
+    range_start, range_end = paragraph_range(material_id, range_type, start, end)
+    candidate_set = db.find_candidate_set(material_id, range_start, range_end)
+    if candidate_set is None:
+        roles = candidate_service.generate(
+            get_material_text(material_id, range_start, range_end),
+            get_paragraph_labels(),
+            name_max=ROLE_NAME_MAX,
+            feature_max=ROLE_FEATURE_MAX,
+        )
+        candidate_set = db.save_candidate_set(chat_service.new_conversation_id(), material_id, range_start, range_end, roles)
+    return [
+        {
+            "candidate_id": candidate_service.candidate_id(candidate_set["id"], i),
+            "name": role["name"],
+            "summary": role["summary"],
+            "features": list(role["features"]),
+            "image": None,
+            "edited": False,
+        }
+        for i, role in enumerate(candidate_set["roles"])
+    ]
+
+
+def find_generated_role(role_id: str):
+    # AI が作った候補（g<まとまりのID>-<番号>）の、元のロール（根拠と口調つき）。なければ None
+    if not isinstance(role_id, str) or not candidate_service.CANDIDATE_ID_PATTERN.fullmatch(role_id):
+        return None
+    candidate_set_id, number = role_id[1:].split("-")
+    candidate_set = db.get_candidate_set(candidate_set_id)
+    if candidate_set is None or int(number) > len(candidate_set["roles"]):
+        return None
+    return {**candidate_set["roles"][int(number) - 1], "id": role_id}
+
+
 def find_role_source(role_id: str):
     # プリセットのロールか、AIの候補から、元のロールを探す。なければ None
+    generated = find_generated_role(role_id)
+    if generated is not None:
+        return generated
     for role in (SEED_DATA.get("preset_roles") or {}).get("roles") or []:
         if role["id"] == role_id:
             return role
