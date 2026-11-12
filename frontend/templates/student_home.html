@@ -2,7 +2,7 @@
 {# 見た目の基準は docs/reference/student-S1.html。本棚の書き方は教師用の _teacher_shelves.html に合わせている #}
 {# material_sets は main.py の student_home() から渡す（形は get_confirmed_material_sets() と同じ） #}
 {# 選ぶセットは URL の ?set= で決める。なければ一覧の先頭（一番新しいセット） #}
-{# 本を押すと、htmx で #student-dashboard だけを差し替える。本棚も #student-dashboard の中にあるので、選択中の本（aria-pressed）も一緒に更新される #}
+{# 本を押すと、htmx で #student-dashboard だけを差し替える。本棚と「ロールを選ぶ」ボタンも #student-dashboard の中にあるので、選択中の本（aria-pressed）とボタンのリンク先も一緒に更新される #}
 {# JavaScript が動かなくても、本は GET のフォームとして /student?set=… に移動する #}
 {% extends "base.html" %}
 
@@ -60,7 +60,9 @@
   <p class="m-0 text-[13px] text-sepia-muted">左の本棚から本を1冊選ぶと、右にその中身が出ます。</p>
 </div>
 
-<div id="student-dashboard" class="flex flex-col lg:flex-row lg:items-start gap-6">
+{# htmx で差し替える範囲。下の「ロールを選ぶ」ボタンも、選んだセットに合わせて変わるよう、この中に入れる #}
+<div id="student-dashboard">
+<div class="flex flex-col lg:flex-row lg:items-start gap-6">
   {# 左：本棚。本の1冊1冊が、セットを選ぶボタン #}
   <nav aria-labelledby="shelves-title" class="w-full lg:w-[440px] lg:flex-none flex flex-col gap-2.5">
     <div class="p-3 bg-wood rounded-[10px]">
@@ -123,12 +125,20 @@
         {% if selected.author %}<p class="m-0 text-sm text-sepia-muted">作者：{{ selected.author }}</p>{% endif %}
       </div>
 
-      {# 教材セットに「概要」の項目はまだないため、なければ問いを出す。どちらもなければ、この行ごと出さない #}
-      {% set summary = selected.summary or selected.question %}
-      {% if summary %}
+      {# 先生が書いた問いかけ（教材セットの question）。なければ、この行ごと出さない #}
+      {# 自動エスケープのまま出す（|safe は使わない）。改行はそのまま改行として見せる #}
+      {% if selected.question %}
+        <div class="flex flex-col gap-1.5 px-4 py-3 bg-kinari border-l-4 border-gold rounded-r-[10px]">
+          <h3 class="m-0 text-[13px] font-bold text-crimson-dark">先生からの問いかけ</h3>
+          <p class="m-0 font-serif text-[17px] font-bold leading-[1.7] whitespace-pre-line [overflow-wrap:anywhere] [word-break:auto-phrase]">{{ selected.question }}</p>
+        </div>
+      {% endif %}
+
+      {# 概要。教材セットに「概要」の項目はまだないため、なければ、この行ごと出さない #}
+      {% if selected.summary %}
         <div class="flex flex-col gap-1.5">
           <h3 class="m-0 text-[13px] font-bold">概要</h3>
-          <p class="m-0 text-[15px] leading-[1.8] break-words">{{ summary }}</p>
+          <p class="m-0 text-[15px] leading-[1.8] break-words">{{ selected.summary }}</p>
         </div>
       {% endif %}
 
@@ -163,5 +173,6 @@
   {% if selected is not none %}
     <a href="/student/roles?set={{ selected.id | urlencode }}" class="inline-flex items-center justify-center min-h-[52px] px-10 rounded-[10px] bg-crimson border-b-3 border-gold text-lg font-bold tracking-[0.1em] text-white hover:bg-crimson-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">ロールを選ぶ</a>
   {% endif %}
+</div>
 </div>
 {% endblock %}

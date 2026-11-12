@@ -1,6 +1,7 @@
 {# 教師用：ロールの選択画面（見た目の基準は「ロール候補の選択 K1 栞カード」）。値はすべて main.py の render_teacher_candidates() から渡す（検証済み） #}
 {# material: get_material() の値 / range_type・start・end: 使用範囲 / range_label: 範囲の表示用の文章 #}
 {# candidates: get_role_candidates() の値（最大6つ） / selected_ids: 選択済みの候補ID / error: エラーの文章（なければ None） #}
+{# question: 問いかけの入力値 / question_error: 問いかけのエラーの文章（なければ None） / question_max_length: 問いかけの文字数の上限（main.py の QUESTION_MAX_LENGTH） #}
 {# select_max: 選ぶロールの数（main.py の ROLE_SELECT_MAX）。チームの決定で、ちょうどこの数を選ぶ（送信時のチェックはバックエンドで対応予定） #}
 {% extends "teacher_base.html" %}
 {% set nav_current = "materials" %}
@@ -88,12 +89,31 @@
             </label>
 
             {# チェックの状態と教材・範囲を、GETのクエリとして編集画面に引き継ぐ（JavaScriptなしで動く） #}
-            <button type="submit" formaction="/teacher/candidates/{{ c.candidate_id | urlencode }}/edit" formmethod="get" aria-label="{{ c.name }}を編集する"
+            {# formnovalidate：問いかけが空でも（required があっても）編集画面へ進めるようにする #}
+            <button type="submit" formaction="/teacher/candidates/{{ c.candidate_id | urlencode }}/edit" formmethod="get" formnovalidate aria-label="{{ c.name }}を編集する"
                     class="inline-flex items-center justify-center min-h-11 px-5 border border-rose-line rounded-[10px] bg-cream-paper text-sm font-bold text-crimson-dark cursor-pointer hover:bg-rose-soft {{ focus_cls }}">編集する</button>
           </div>
         </li>
       {% endfor %}
     </ul>
+
+    {# 生徒への問いかけ（教師の自由入力）。生徒は、対話の前にこの文を読んで考えを書く #}
+    {# 「編集する」で編集画面へ移ると、ここに書いた文は残らない。そのため、ロールを選び終えたあとに書く位置（追加ボタンの直前）に置く #}
+    <div class="flex flex-col gap-2 mt-2">
+      <label for="question" class="font-serif text-[17px] font-bold">生徒への問いかけ</label>
+      <p id="question-help" class="m-0 text-sm leading-[1.7] text-sepia-muted">生徒は、対話の前にこの問いを読んで、自分の考えを書きます。</p>
+      {% if question_error %}
+        <p id="question-error" role="alert" class="m-0 text-[13px] leading-normal text-crimson-dark">{{ question_error }}</p>
+      {% endif %}
+      {# 文字数は枠の中の右下に重ねる #}
+      <div class="relative">
+        <textarea id="question" name="question" rows="3" required maxlength="{{ question_max_length }}"
+                  placeholder="例：豊太郎の行動を、あなたはどう思いますか？"
+                  aria-describedby="question-help{% if question_error %} question-error{% endif %} question-count"
+                  class="block w-full min-h-[120px] resize-y px-4 pt-3 pb-9 text-base leading-[1.8] text-sepia bg-cream-paper border {{ 'border-crimson' if question_error else 'border-cream-line' }} rounded-[10px] placeholder:text-sepia-muted/85 {{ focus_cls }} focus-visible:border-crimson">{{ question }}</textarea>
+        <p id="question-count" class="absolute right-4 bottom-2.5 m-0 text-[13px] text-sepia-muted tabular-nums pointer-events-none"><span id="question-count-now">0</span> / {{ question_max_length }}文字</p>
+      </div>
+    </div>
   {% endif %}
 
   {# 操作の行。左：教材を選び直す、右：この内容で追加する。640px以下は縦に積み、「追加する」を上にする #}
@@ -128,6 +148,23 @@
     };
     form.addEventListener("change", update);
     // ブラウザの「戻る」で表示したときも、チェックの状態に合わせ直す
+    window.addEventListener("pageshow", update);
+    update();
+  })();
+
+  // 問いかけの文字数の表示。上限は textarea の maxlength から読む（90%以上で濃い赤・太字）
+  (() => {
+    const input = document.getElementById("question");
+    const count = document.getElementById("question-count-now");
+    if (!input || !count) return;
+    const update = () => {
+      const near = input.value.length >= input.maxLength * 0.9;
+      count.parentElement.classList.toggle("text-crimson-dark", near);
+      count.parentElement.classList.toggle("font-bold", near);
+      count.parentElement.classList.toggle("text-sepia-muted", !near);
+      count.textContent = input.value.length;
+    };
+    input.addEventListener("input", update);
     window.addEventListener("pageshow", update);
     update();
   })();

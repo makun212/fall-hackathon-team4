@@ -119,7 +119,7 @@ class CandidateTests(unittest.TestCase):
         self.assertRegex(first, candidates.CANDIDATE_ID_PATTERN)
         data = {**RANGE, "name": "編集した立場", "feature_1": "a", "feature_2": "b", "feature_3": "c"}
         self.assertEqual(303, self.app.post(f"/teacher/candidates/{first}/edit", data=data, follow_redirects=False).status_code)
-        self.app.post("/teacher/candidates/confirm", data={**RANGE, "selected": [first]})
+        self.app.post("/teacher/candidates/confirm", data={**RANGE, "selected": [first], "question": "問い"})
         material_set_id = db.read_material_sets()[0]["id"]
         self.assertEqual("編集した立場", db.read_material_sets()[0]["roles"][0]["name"])
 
