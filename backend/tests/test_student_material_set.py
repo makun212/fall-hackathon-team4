@@ -14,7 +14,8 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 import ai  # noqa: E402
 import chat  # noqa: E402
 import db  # noqa: E402
-import main  # noqa: E402
+import main  # noqa: E402
+
 from auth_helper import login  # noqa: E402
 from rate_limit import RateLimiter  # noqa: E402
 
@@ -73,7 +74,7 @@ class StudentMaterialSetTests(unittest.TestCase):
     def test_db_material_set_uses_saved_range(self):
         self.app.post(
             "/teacher/candidates/confirm",
-            data={"material_id": "m001", "range_type": "paragraph", "start": "40", "end": "50", "selected": ["r005"]},
+            data={"material_id": "m001", "range_type": "paragraph", "start": "40", "end": "50", "selected": ["r005"], "question": "問い"},
         )
         material_set_id = db.read_material_sets()[0]["id"]
         db.start_lesson(material_set_id)

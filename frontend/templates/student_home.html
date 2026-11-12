@@ -123,12 +123,20 @@
         {% if selected.author %}<p class="m-0 text-sm text-sepia-muted">作者：{{ selected.author }}</p>{% endif %}
       </div>
 
-      {# 教材セットに「概要」の項目はまだないため、なければ問いを出す。どちらもなければ、この行ごと出さない #}
-      {% set summary = selected.summary or selected.question %}
-      {% if summary %}
+      {# 先生が書いた問いかけ（教材セットの question）。なければ、この行ごと出さない #}
+      {# 自動エスケープのまま出す（|safe は使わない）。改行はそのまま改行として見せる #}
+      {% if selected.question %}
+        <div class="flex flex-col gap-1.5 px-4 py-3 bg-kinari border-l-4 border-gold rounded-r-[10px]">
+          <h3 class="m-0 text-[13px] font-bold text-crimson-dark">先生からの問いかけ</h3>
+          <p class="m-0 font-serif text-[17px] font-bold leading-[1.7] whitespace-pre-line [overflow-wrap:anywhere] [word-break:auto-phrase]">{{ selected.question }}</p>
+        </div>
+      {% endif %}
+
+      {# 概要。教材セットに「概要」の項目はまだないため、なければ、この行ごと出さない #}
+      {% if selected.summary %}
         <div class="flex flex-col gap-1.5">
           <h3 class="m-0 text-[13px] font-bold">概要</h3>
-          <p class="m-0 text-[15px] leading-[1.8] break-words">{{ summary }}</p>
+          <p class="m-0 text-[15px] leading-[1.8] break-words">{{ selected.summary }}</p>
         </div>
       {% endif %}
 

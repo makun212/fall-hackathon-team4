@@ -108,10 +108,39 @@ def find_conversation_role(role_id: str, material_set):
 OPINION_MAX_LENGTH = 200
 
 
-def get_question():
-    # 対話の前に生徒に見せる問いかけ。問いかけを使うのは、この関数1か所だけ
-    # ダミーデータに問いかけのキーはまだないため、いまは固定の文。教材セットごとの問いかけに差し替える
-    return "豊太郎の行動を、あなたはどう思いますか？"
+# 教師が入力する問いかけの文字数の上限。この値は、チームで確認して決める（仮の値）
+QUESTION_MAX_LENGTH = 100
+
+# 教材セットに問いかけがないとき（教材セットを選んでいない・古いデータ）に使う文
+DEFAULT_QUESTION = "豊太郎の行動を、あなたはどう思いますか？"
+
+
+def get_question(material_set=None):
+    # 対話の前に生徒に見せる問いかけ。教材セットに教師が入力した問いかけがあれば、それを使う
+    question = (material_set or {}).get("question") or ""
+    return question or DEFAULT_QUESTION
+
+
+def student_question_text(request: Request, conversation=None):
+    # 生徒の画面に出す問いかけ。会話があれば、その会話の教材セット（保存した ID）から取る
+    # 会話がなければ、生徒が選んだ教材セット（Cookie）から取る
+    if conversation is not None:
+        material_set_id = conversation.get("material_set_id")
+    else:
+        material_set_id = request.cookies.get(MATERIAL_SET_COOKIE)
+    material_set = get_material_set_for_chat(material_set_id) if material_set_id else None
+    return get_question(material_set)
+
+
+def clean_question(value: str):
+    # 教師が入力した問いかけを検証する。(整えた文, エラーの文章 or None) を返す
+    # ブラウザは送信時に改行を「\r\n」（2文字）にするため、画面の maxlength と数え方をそろえる
+    text = value.replace("\r\n", "\n").strip()
+    if not text:
+        return text, "生徒への問いかけを書いてください。"
+    if len(text) > QUESTION_MAX_LENGTH:
+        return text, f"問いかけが長すぎます。{QUESTION_MAX_LENGTH}文字以内にしてください。"
+    return text, None
 
 
 def render_student_question(request: Request, role, opinion: str = "", error: str | None = None, status_code: int = 200):
@@ -121,7 +150,7 @@ def render_student_question(request: Request, role, opinion: str = "", error: st
         "student_question.html",
         {
             "role": role,
-            "question": get_question(),
+            "question": student_question_text(request),
             "opinion": opinion,
             "error": error,
             "opinion_max_length": OPINION_MAX_LENGTH,
@@ -175,7 +204,7 @@ def render_student_reflection(
         "student_reflection.html",
         {
             "role": role,
-            "question": get_question(),
+            "question": student_question_text(request, conversation),
             "pre_opinion": get_pre_opinion(conversation),
             "conversation_id": conversation["id"] if conversation else None,
             "reflection": reflection,
@@ -817,8 +846,11 @@ def render_teacher_candidates(
     selected_ids,
     error: str | None = None,
     status_code: int = 200,
+    question: str = "",
+    question_error: str | None = None,
 ):
     # ロールの選択画面を返す（GET と、POST の入力エラーで共用）。値はすべて検証済みのものを渡す
+    # question は教師が入力したままの文（エラーのとき、消さずに入力欄に戻す。テンプレートで自動エスケープする）
     return templates.TemplateResponse(
         request,
         "teacher_candidates.html",
@@ -832,6 +864,9 @@ def render_teacher_candidates(
             "selected_ids": selected_ids,
             "select_max": ROLE_SELECT_MAX,
             "error": error,
+            "question": question,
+            "question_error": question_error,
+            "question_max_length": QUESTION_MAX_LENGTH,
         },
         status_code=status_code,
     )
@@ -1119,12 +1154,14 @@ def teacher_candidates_confirm(
     start: str = Form(""),
     end: str = Form(""),
     selected: list[str] = Form([]),
+    question: str = Form(""),
 ):
     resolved = resolve_candidates_request(material_id, range_type, start, end)
     if resolved is None:
         return RedirectResponse("/teacher/materials", status_code=303)
     material, range_type, start, end = resolved
 
+    question_text, question_error = clean_question(question)
     candidates = get_role_candidates(material["id"], range_type, start, end)
     selected_ids = filter_selected(candidates, selected)
     error = None
@@ -1134,10 +1171,11 @@ def teacher_candidates_confirm(
         error = "選んだロールが正しくありません。もう一度選んでください。"
     elif len(selected_ids) > ROLE_SELECT_MAX:
         error = f"選べるロールは{ROLE_SELECT_MAX}つまでです。選ぶロールを減らしてください。"
-    if error:
-        # 選んだ状態（候補にあるIDだけ）は、消さずに画面に戻す
+    if error or question_error:
+        # 選んだ状態（候補にあるIDだけ）と、入力した問いかけは、消さずに画面に戻す
         return render_teacher_candidates(
-            request, material, range_type, start, end, candidates, selected_ids, error=error, status_code=422
+            request, material, range_type, start, end, candidates, selected_ids, error=error, status_code=422,
+            question=question, question_error=question_error,
         )
 
     # 選んだロール（編集後の内容）を、教材セットとして保存する（#13）
@@ -1159,7 +1197,7 @@ def teacher_candidates_confirm(
             }
             for candidate_id in selected_ids
         ],
-        question=get_question(),
+        question=question_text,
     )
     return RedirectResponse(NEXT_AFTER_CONFIRM, status_code=303)
 
@@ -1662,7 +1700,7 @@ def find_role_source(role_id: str):
 
 
 def get_material_set_for_chat(material_set_id: str):
-    # 生徒の対話に使う教材セット。{"material_id", "material_text", "roles"} を返す。なければ None
+    # 生徒の対話に使う教材セット。{"material_id", "material_text", "roles", "question"} を返す。なければ None
     # roles は prompts.build_system_prompt に渡せる形（教師が編集した名前・特徴を使い、根拠と口調は元のロールから取る）
     record = next((r for r in read_material_set_records() if r["id"] == material_set_id), None)
     if record is None:
@@ -1685,6 +1723,7 @@ def get_material_set_for_chat(material_set_id: str):
         "material_id": record["material_id"],
         "material_text": get_material_text(record["material_id"], record["range_start"], record["range_end"]),
         "roles": roles,
+        "question": record.get("question") or "",
     }
 
 

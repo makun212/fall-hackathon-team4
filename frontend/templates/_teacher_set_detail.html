@@ -1,5 +1,5 @@
 {# 教材セット選択の右側：選択中のセットの詳細（#set-detail の中身）。selected は main.py の render_teacher_home() から渡す #}
-{# selected: id、title、author、range_label、roles（name、image） #}
+{# selected: id、title、author、range_label、question、roles（name、image） #}
 
 {# 移動先は、ここだけで定義する #}
 {% set new_url = "/teacher/materials" %}
@@ -19,6 +19,15 @@
       <p class="text-base text-sepia-muted">{% if selected.author %}{{ selected.author }}／{% endif %}{{ selected.range_label }}</p>
     </div>
   </div>
+
+  {# 先生が書いた問いかけ（生徒の本棚の画面と同じ見た目）。なければ、この行ごと出さない #}
+  {# 自動エスケープのまま出す（|safe は使わない）。改行はそのまま改行として見せる #}
+  {% if selected.question %}
+    <div class="flex flex-col gap-1.5 px-4 py-3 bg-kinari border-l-4 border-gold rounded-r-[10px]">
+      <h3 class="text-sm font-bold text-crimson-dark">生徒への問いかけ</h3>
+      <p class="font-serif text-lg font-bold leading-[1.7] whitespace-pre-line [overflow-wrap:anywhere] [word-break:auto-phrase]">{{ selected.question }}</p>
+    </div>
+  {% endif %}
 
   <div class="flex items-center gap-2.5">
     <h3 class="text-base font-bold">ロール</h3>
