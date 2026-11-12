@@ -123,7 +123,7 @@ class AuthTests(unittest.TestCase):
 
     def test_unverified_email_is_rejected(self):
         response = self.google_login("student", {**GOOGLE_USER, "email_verified": False})
-        self.assertEqual("/student/login", response.headers["location"])
+        self.assertEqual("/student/login?error=google_email_not_verified", response.headers["location"])
         self.assertIsNone(db.get_user("google:12345"))
 
     def test_role_param_cannot_make_a_teacher(self):
@@ -138,8 +138,11 @@ class AuthTests(unittest.TestCase):
         self.assertEqual("/student/login", self.app.get("/student", follow_redirects=False).headers["location"])
 
     def test_google_not_configured(self):
-        self.assertFalse(hasattr(auth.oauth, "google"))
-        self.assertEqual(503, self.app.get("/auth/google/login?role=student").status_code)
+        # 手元の .env に Google の設定があっても、設定がない状態で確かめる
+        from authlib.integrations.starlette_client import OAuth
+
+        with patch.object(auth, "oauth", OAuth()):
+            self.assertEqual(503, self.app.get("/auth/google/login?role=student").status_code)
 
     # ---- 開発用ログイン ----
 
