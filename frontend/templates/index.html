@@ -66,10 +66,21 @@
       {# 返事が来たら、サーバーが返す _message.html の自分の吹き出しと入れ替える。失敗したときは残して「送信できませんでした」を付ける #}
       {# #chat の後ろには置かない（下の案内が #chat:empty+& で #chat のすぐ後ろを見ているため） #}
       <template id="me-msg-template">{{ chat_msg("me", "あなた", "") }}</template>
+
+      {# 最初の話しかけ。AIは呼ばない決まった文で、会話の履歴にも残らない（AIはこの文を知らない） #}
+      {# #chat の外に置く（#chat の中に入れると、#chat:empty を使う案内や「考え中」の余白が変わるため） #}
+      {% if role_name %}
+        <div class="mb-[18px]">
+          {{ chat_msg("ai", role_name, "私は" ~ role_name ~ "です。まずは、あなたの考えを聞かせてください。", role_name[:1]) }}
+        </div>
+      {% endif %}
+
       <div id="chat" class="flex flex-col gap-[18px]" role="log" aria-live="polite" aria-label="対話の記録"></div>
 
-      {# まだ発言がないときだけ出る案内（#chat が空のとき）。送信中は消す #}
-      <p class="hidden [#chat:empty+&]:flex [#chat-scroll:has(#typing.htmx-request)_&]:hidden h-full items-center justify-center m-0 text-center text-sm text-sepia-muted">下の入力欄から、あなたの考えを送ってみよう</p>
+      {# まだ発言がないときだけ出る案内（#chat が空のとき）。送信中は消す。話しかけがあるとき（ロールあり）は出さない #}
+      {% if not role_name %}
+        <p class="hidden [#chat:empty+&]:flex [#chat-scroll:has(#typing.htmx-request)_&]:hidden h-full items-center justify-center m-0 text-center text-sm text-sepia-muted">下の入力欄から、あなたの考えを送ってみよう</p>
+      {% endif %}
 
       {# 返事を待つ間だけ出る吹き出し。htmx が送信中に htmx-request を付け、返事が来たら外す #}
       {# 見た目は chat_msg の相手の吹き出しとそろえる #}
