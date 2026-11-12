@@ -1,4 +1,5 @@
 import base64
+import logging
 import json
 import os
 import secrets
@@ -50,6 +51,7 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
     )
 
 router = APIRouter()
+logger = logging.getLogger("uvicorn.error")
 
 
 def current_user(request: Request):
@@ -89,6 +91,14 @@ def after_login_url(user, wanted_role: str) -> str:
 
 # ---- ログイン・ログアウト ----
 
+# ログインの失敗の理由として画面に出してよい、決まった文字（Google から届いた文字をそのまま画面に出さない）
+LOGIN_FAILURE_REASONS = {"invalid_client", "mismatching_state", "access_denied", "invalid_grant", "email_not_verified"}
+
+
+def login_failed(wanted_role: str, reason: str):
+    reason = reason if reason in LOGIN_FAILURE_REASONS else "unknown"
+    return RedirectResponse(f"{LOGIN_PAGES.get(wanted_role, LOGIN_PAGES['student'])}?error=google_{reason}", status_code=303)
+
 
 @router.get("/auth/google/login")
 async def google_login(request: Request, role: str = "student"):
@@ -107,11 +117,16 @@ async def google_callback(request: Request):
     wanted_role = request.session.get("login_role", "student")
     try:
         token = await oauth.google.authorize_access_token(request)
-    except OAuthError:
-        return RedirectResponse(LOGIN_PAGES.get(wanted_role, "/"), status_code=303)
+    except OAuthError as e:
+        # 理由（invalid_client＝シークレットが違う、mismatching_state＝セッションが切れた など）をログと画面に出す
+        # 理由の名前だけを出し、ID・シークレット・トークンは出さない
+        reason = getattr(e, "error", None) or "unknown"
+        logger.warning("Googleログインに失敗しました: %s", reason)
+        return login_failed(wanted_role, reason)
     info = token.get("userinfo") or {}
     if not info.get("sub") or not info.get("email_verified"):
-        return RedirectResponse(LOGIN_PAGES.get(wanted_role, "/"), status_code=303)
+        logger.warning("Googleログインに失敗しました: email_not_verified")
+        return login_failed(wanted_role, "email_not_verified")
     # 保存するのは、Google のユーザー ID と名前だけ（#36）。メールアドレスは先生かどうかの判定にだけ使う
     user = db.upsert_user(f"google:{info['sub']}", "", info.get("name") or "")
     role = teacher_role_for(info.get("email") or "", wanted_role)
