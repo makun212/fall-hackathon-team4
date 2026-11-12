@@ -55,6 +55,7 @@ class PrivacyTests(unittest.TestCase):
             context.start()
             self.addCleanup(context.stop)
         self.app = TestClient(main.app)
+        self.app.headers["Origin"] = "http://testserver"
         self.app.get("/auth/google/login?role=student")
         self.app.get("/auth/google/callback")
 

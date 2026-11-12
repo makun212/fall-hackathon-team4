@@ -1653,6 +1653,9 @@ def generated_candidates(material_id: str, range_type: str, start: str, end: str
     range_start, range_end = paragraph_range(material_id, range_type, start, end)
     candidate_set = db.find_candidate_set(material_id, range_start, range_end)
     if candidate_set is None:
+        # 候補生成もAIを呼ぶため、チャットと同じ全体枠を使う。キャッシュには数えない。
+        if not chat_service.global_limiter.allow():
+            raise AIBusyError("AIが混み合っています。少し待ってから、もう一度送ってください。")
         roles = candidate_service.generate(
             get_material_text(material_id, range_start, range_end),
             get_paragraph_labels(),

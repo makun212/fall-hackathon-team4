@@ -4,6 +4,7 @@ import json
 import os
 import secrets
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from dotenv import load_dotenv
@@ -150,8 +151,11 @@ def dev_login(request: Request, role: str = "student"):
     return RedirectResponse(after_login_url(user, wanted_role), status_code=303)
 
 
-@router.get("/auth/logout")
+@router.post("/auth/logout")
 def logout(request: Request):
+    # ログアウトも状態変更。外部ページのリンクや画像では実行させない。
+    if not same_origin_request(request):
+        return JSONResponse({"detail": "送信元を確認できません"}, status_code=403)
     request.session.clear()
     return RedirectResponse("/", status_code=303)
 
@@ -191,8 +195,33 @@ async def access_control(request: Request, call_next):
         if request.method == "GET":
             return RedirectResponse(NOT_TEACHER_PAGE, status_code=303)
         return JSONResponse({"detail": "教師だけが使えます"}, status_code=403)
+    # Cookieが送られてきても、別サイトのフォームからの更新は認めない。
+    # OriginがないブラウザはRefererで確認し、両方なければ安全側に拒否する。
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and not same_origin_request(request):
+        return JSONResponse({"detail": "送信元を確認できません。アプリの画面から再送してください。"}, status_code=403)
     request.state.user = user
     return await call_next(request)
+
+
+def origin_tuple(value: str):
+    """scheme・host・実効portを比較する。文字列の前方一致では確認しない。"""
+    try:
+        parts = urlsplit(value)
+        if parts.scheme not in {"http", "https"} or not parts.hostname or parts.username is not None or parts.password is not None:
+            return None
+        port = parts.port if parts.port is not None else (443 if parts.scheme == "https" else 80)
+        return parts.scheme, parts.hostname.lower(), port
+    except ValueError:
+        return None
+
+
+def same_origin_request(request: Request) -> bool:
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        return False
+    # Originが存在するなら、不正でもRefererへフォールバックさせない。
+    source = request.headers.get("origin") if "origin" in request.headers else request.headers.get("referer", "")
+    origin = origin_tuple(source)
+    return origin is not None and origin == origin_tuple(str(request.url))
 
 
 # ---- テスト用 ----
