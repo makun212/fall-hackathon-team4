@@ -71,7 +71,7 @@ REPLY_SCHEMA = {
 EVIDENCE_INSTRUCTION = f"""
 
 【出力の形】
-reply に生徒への返事を書く。evidence には、返事のもとにした今回の本文（material_text）の箇所を最大{EVIDENCE_MAX}つ入れる。
+reply に生徒への返事を書く。reply では原文を引用せず現代語で言い換える。原文は evidence の quote にだけ入れる。evidence には、返事のもとにした今回の本文（material_text）の箇所を最大{EVIDENCE_MAX}つ入れる。
 paragraph_id は本文に書かれた段落ID（[p001] の p001）、quote はその段落から一字一句そのまま抜き出した{QUOTE_MAX_LENGTH}字以内の引用にする。
 要約や言い換えを quote に入れない。今回の本文から引用できないとき（ロール付属の根拠だけのときも）は、evidence を空のリストにする。"""
 PARAGRAPH_PATTERN = re.compile(r"^\[(p[0-9A-Za-z_-]+)\]\n(.*?)(?=\n\n\[p[0-9A-Za-z_-]+\]\n|\Z)", re.S | re.M)
