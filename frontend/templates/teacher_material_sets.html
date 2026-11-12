@@ -1,7 +1,11 @@
-{# 教師用：作成した（確定済みの）教材セットの一覧。material_sets は main.py の get_confirmed_material_sets() から渡す #}
+{# 教師用：教材セット一覧（旧「作成した教材セット」「教材セット詳細」。確定済みの教材セットの一覧）。material_sets は main.py の get_confirmed_material_sets() から渡す #}
 {# 教材セット: id、title、range_label、question、created_label、roles（name、features、image、edited） #}
+{# 見た目の基準は docs/reference/material-sets-detail.html。タブレット横 1180×820 で1画面に収め、教材セットの並びだけがスクロールする #}
+{# lesson_statuses は {教材セットのID: not_started / open / ended}。main.py の teacher_material_sets() から渡す。無いセットは札を出さない #}
 {% extends "teacher_base.html" %}
-{% from "_components.html" import page_header, btn_primary, btn_secondary, avatar, badge %}
+{% set nav_current = "materials" %}
+{# この画面からは、生徒のチャット一覧・感想の提出状況へは行かない（ヘッダーは「教材セット選択」だけ） #}
+{% set hide_nav = ["chats", "submissions"] %}
 
 {# 移動先は、ここだけで定義する #}
 {% set back_url = "/teacher" %}
@@ -9,76 +13,149 @@
 
 {% macro lesson_url(ms) %}/teacher/material-sets/{{ ms.id | urlencode }}/lesson{% endmacro %}
 
-{% block title %}作成した教材セット | {% endblock %}
+{% block title %}教材セット一覧 | {% endblock %}
+{% block body_class %}bg-cream text-sepia ms-page{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{# Tailwind の class で書けない部分（1画面に収める高さの計算、並びのスクロール、札の形）だけをここにまとめる #}
+{# 色は基準HTMLの値を直書き（Tailwind は、その画面で class に使っていない @theme の変数を出力しないため） #}
+<style>
+  body.ms-page{font-family:'Noto Sans JP',sans-serif}
+  body.ms-page>main{max-width:960px;width:100%;margin:0 auto;padding:22px 32px 0;display:flex;flex-direction:column;gap:12px;font-size:15px;line-height:normal}
+  .ms-serif{font-family:'Noto Serif JP',serif;font-weight:700}
+  .ms-hrow{flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+  .ms-h1{margin:0;padding-bottom:6px;border-bottom:3px solid #A61E22;font-size:24px;line-height:1.4}
+  .ms-cnt{margin:0;font-size:14px;color:#5C4B3B;white-space:nowrap}
+  .ms-cnt b{color:#8E1B1F}
+  .ms-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:18px;margin:0 -6px 0 0;padding:4px 6px 28px 0;scrollbar-color:#C9B99C #F1EADB}
+  .ms-list>*{flex:none}
+  .ms-set{background:#FFFDF8;border:1px solid #E5D9C3;border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+  .ms-sh{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+  .ms-ttl{margin:0;min-width:0;font-size:20px;line-height:1.4;overflow-wrap:anywhere}
+  .ms-ttl small{margin-left:6px;font-family:'Noto Sans JP',sans-serif;font-size:14px;font-weight:400;color:#5C4B3B}
+  .ms-date{margin:0 0 0 auto;font-size:13px;color:#5C4B3B;white-space:nowrap}
+  .ms-pq{background:#FBF1DC;border-radius:10px;padding:10px 14px;font-size:15px;line-height:1.7;overflow-wrap:anywhere}
+  .ms-pq span{display:block;font-size:12px;font-weight:700;color:#5C4B3B}
+  .ms-rl{margin:0 0 8px;font-size:15px;font-weight:700}
+  .ms-rg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0;padding:0;list-style:none}
+  .ms-rcd{min-width:0;background:#FFFDF8;border:1px solid #E5D9C3;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+  .ms-rh{display:flex;align-items:center;gap:10px}
+  .ms-rh h3{margin:0;min-width:0;font-size:14px;font-weight:700;line-height:1.5;overflow-wrap:anywhere}
+  .ms-ini{flex:none;width:30px;height:30px;border-radius:999px;background:#A61E22;color:#FFF8E7;font-family:'Noto Serif JP',serif;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .ms-ft{margin:0;padding-left:18px;list-style:disc;font-size:13px;line-height:1.7;color:#5C4B3B;overflow-wrap:anywhere}
+  .ms-st{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap}
+  .ms-st.is-before{border:1.5px dashed #8A7A68;background:#FFFDF8;color:#5C4B3B}
+  .ms-st.is-live{border:2px solid #A61E22;background:#FBE3E3;color:#8E1B1F}
+  .ms-st.is-after{border:1.5px solid #6E9A66;background:#E9F3E6;color:#2E5A2A}
+  .ms-ed{align-self:flex-start;margin-top:auto;padding:2px 8px;border-radius:6px;background:#EFE5D0;color:#5C4B3B;font-size:12px;font-weight:700}
+  .ms-acts{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
+  .ms-ob{min-height:42px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #C9A9A3;border-radius:8px;background:#FFFDF8;font-size:14px;font-weight:700;color:#8E1B1F;white-space:nowrap}
+  .ms-ob:hover{background:#F8E3E0}
+  .ms-cta{min-height:42px;padding:0 22px;display:inline-flex;align-items:center;justify-content:center;border:0;border-bottom:3px solid #E4C26A;border-radius:10px;background:#A61E22;color:#fff;font:inherit;font-size:14px;font-weight:700;white-space:nowrap;cursor:pointer}
+  .ms-cta:hover{background:#8E1B1F}
+  .ms-empty{display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px 16px;border:1px dashed #C9B99C;border-radius:14px;color:#5C4B3B;text-align:center}
+  .ms-empty p{margin:0}
+  .ms-hl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+  .ms-bc{flex:none;margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13px;color:#5C4B3B}
+  .ms-bc li+li::before{content:"›";margin-right:8px;color:#8A7A68}
+  .ms-bc a{color:#8E1B1F;text-decoration:underline}
+  .ms-list:focus-visible,.ms-ob:focus-visible,.ms-cta:focus-visible,.ms-bc a:focus-visible{outline:3px solid #1F2A44;outline-offset:2px}
+
+  {# 1画面に収める：body を縦の flex にして、教材セットの並びだけをスクロールさせる #}
+  body.ms-page{height:100dvh;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  body.ms-page>main{flex:1;min-height:0}
+  {# 高さが足りない画面では、並びの枠のスクロールをやめて、ページ全体をスクロールさせる #}
+  @media (max-height:600px){
+    body.ms-page{height:auto;overflow:visible}
+    .ms-list{flex:none;overflow:visible}
+  }
+  {# スマホ幅は対象外。横スクロールが出ない程度にだけ崩す #}
+  @media (max-width:640px){
+    body.ms-page>main{padding:18px 16px 0}
+    .ms-rg{grid-template-columns:1fr}
+    .ms-acts>*{flex:1}
+    .ms-acts .ms-ob,.ms-acts .ms-cta{width:100%}
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-4">
-  {{ page_header("作成した教材セット") }}
+<nav aria-label="パンくずリスト"><ol class="ms-bc">
+  <li><a href="{{ back_url }}">教材セット選択</a></li>
+  <li aria-current="page">教材セット一覧</li>
+</ol></nav>
+
+{# 題名の行は固定。「戻る」は題名の横に置き、並びと一緒にスクロールしない（基準HTMLには無いが、移動の手段を減らさないため） #}
+<div class="ms-hrow">
+  <div class="ms-hl">
+    <h1 class="ms-h1 ms-serif">教材セット一覧</h1>
+    <a class="ms-ob" href="{{ back_url }}">教材セット選択に戻る</a>
+  </div>
   {% if material_sets %}
-    <p class="mb-8 text-base text-muted">全 <span class="font-bold text-ink">{{ material_sets | length }}</span> 件</p>
+    <p class="ms-cnt">全 <b>{{ material_sets | length }}</b> 件</p>
   {% endif %}
 </div>
 
 {% if not material_sets %}
-  <div class="flex flex-col items-center gap-4 px-4 py-8 bg-subtle rounded-lg text-center">
-    <p class="text-muted">作成した教材セットは、まだありません。教材を選んで、ロールを決めると、ここに表示されます。</p>
-    {{ btn_primary("教材を選ぶ", href=new_url) }}
+  <div class="ms-empty">
+    <p>作成した教材セットは、まだありません。教材を選んで、ロールを決めると、ここに表示されます。</p>
+    <a class="ms-cta" href="{{ new_url }}">教材を選ぶ</a>
   </div>
 {% else %}
-  <ul class="flex flex-col gap-6">
+  <div class="ms-list" tabindex="0" role="region" aria-label="教材セットの一覧">
     {% for ms in material_sets %}
-      <li>
-        <section aria-labelledby="set-{{ loop.index }}-title" class="flex flex-col gap-4 p-6 bg-paper border border-line rounded-lg">
+      {% set set_name = ms.created_label ~ "の" ~ ms.title %}
+      {% set lesson_status = (lesson_statuses or {}).get(ms.id) if lesson_statuses is defined else none %}
+        <section aria-labelledby="set-{{ loop.index }}-title" class="ms-set">
           {# 見出しの行。作品名（範囲）と作成日 #}
-          <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 id="set-{{ loop.index }}-title" class="text-2xl font-bold leading-snug break-words">
-              {{ ms.title }}<span class="ml-2 text-lg font-normal text-muted">（{{ ms.range_label }}）</span>
-            </h2>
-            <p class="text-base text-muted">作成日 {{ ms.created_label }}</p>
+          <div class="ms-sh">
+            <h2 id="set-{{ loop.index }}-title" class="ms-ttl ms-serif">{{ ms.title }}<small>（{{ ms.range_label }}）</small></h2>
+            {# 授業の状態。色だけに頼らず、枠の形と文字で区別する #}
+            {% if lesson_status == "open" %}<span class="ms-st is-live">授業中</span>
+            {% elif lesson_status == "ended" %}<span class="ms-st is-after"><span aria-hidden="true">✓</span>授業後</span>
+            {% elif lesson_status == "not_started" %}<span class="ms-st is-before">授業前</span>{% endif %}
+            <p class="ms-date">作成日 {{ ms.created_label }}</p>
           </div>
 
           {% if ms.question %}
-            <div class="px-4 py-3 bg-subtle rounded-lg">
-              <p class="text-base font-bold text-muted">生徒への問いかけ</p>
-              <p class="break-words">{{ ms.question }}</p>
-            </div>
+            <div class="ms-pq"><span>生徒への問いかけ</span>{{ ms.question }}</div>
           {% endif %}
 
-          {# ロール。タブレット横画面（md以上）は3列 #}
+          {# ロール。3列で、4つ以上は折り返す #}
           <div>
-            <h3 class="mb-2 font-bold">ロール（{{ ms.roles | length }}つ）</h3>
-            <ul class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <p class="ms-rl">ロール（{{ ms.roles | length }}つ）</p>
+            <ul class="ms-rg">
               {% for role in ms.roles %}
-                <li class="flex flex-col gap-1.5 px-4 py-3 border border-line rounded-lg">
-                  <div class="flex items-center gap-3 min-w-0">
-                    {{ avatar(role.name[:1]) }}
-                    <h4 class="min-w-0 text-lg font-bold leading-tight break-words">{{ role.name }}</h4>
+                <li class="ms-rcd">
+                  <div class="ms-rh">
+                    <span class="ms-ini" aria-hidden="true">{{ role.name[:1] }}</span>
+                    <h3>{{ role.name }}</h3>
                   </div>
-                  <ul class="list-disc pl-5 text-base leading-tight">
-                    {% for feature in role.features %}
-                      <li>{{ feature }}</li>
-                    {% endfor %}
-                  </ul>
+                  {% if role.features %}
+                    <ul class="ms-ft">
+                      {% for feature in role.features %}
+                        <li>{{ feature }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
                   {# 色だけに頼らず、文字で「編集済み」を出す #}
-                  {% if role.edited %}<div class="mt-auto pt-1">{{ badge("編集済み") }}</div>{% endif %}
+                  {% if role.edited %}<span class="ms-ed">編集済み</span>{% endif %}
                 </li>
               {% endfor %}
             </ul>
           </div>
 
-          {# この教材セットで授業を始める。ボタンはカードの右下 #}
-          <div class="flex flex-wrap justify-end gap-3">
-            {{ btn_secondary("授業の状態・終了", href=lesson_url(ms)) }}
-            <form action="{{ lesson_url(ms) }}/start" method="post">
-              <input type="hidden" name="show_chats" value="true">
-              {{ btn_primary("授業を開始する") }}
-            </form>
+          {# 授業の開始・終了は、授業の画面だけで行う。ここからは授業の画面へ進む #}
+          <div class="ms-acts">
+            {# ボタンの名前は状態で変える（移動先はどれも授業の画面） #}
+            {% set go_label = {"open": "授業の様子を見る", "ended": "授業の記録を見る"}.get(lesson_status, "授業へ進む") %}
+            <a class="ms-cta" href="{{ lesson_url(ms) }}" aria-label="{{ set_name }}の{{ go_label }}">{{ go_label }}</a>
           </div>
         </section>
-      </li>
     {% endfor %}
-  </ul>
+  </div>
 {% endif %}
-
-<div class="mt-6">{{ btn_secondary("戻る", href=back_url) }}</div>
 {% endblock %}

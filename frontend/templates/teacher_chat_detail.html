@@ -17,8 +17,9 @@
 {% set last_sent_at = conversation.last_sent_at %}
 {% set role_initial = role_name[:1] if role_name else "AI" %}
 
-{# 一覧に戻るリンク先。URLを変えるときはここだけ直す #}
-{% set list_url = "/teacher/chats" %}
+{# 一覧に戻るリンク先。URLを変えるときはここだけ直す。授業の画面から来たとき（?set=ID）は、その値を一覧へ引き継ぐ #}
+{% set from_set = request.query_params.get("set", "") %}
+{% set list_url = "/teacher/chats" ~ (("?set=" ~ (from_set | urlencode)) if from_set else "") %}
 
 {% set focus_cls = "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink" %}
 {% set btn_cls = "inline-flex items-center justify-center min-h-11 px-[22px] border border-rose-line rounded-[10px] bg-cream-paper text-[15px] font-bold text-crimson-dark whitespace-nowrap hover:bg-kinari " ~ focus_cls %}

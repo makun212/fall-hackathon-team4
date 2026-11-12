@@ -14,10 +14,14 @@
     <h1 class="font-serif text-[26px] font-bold leading-snug">教材セット選択</h1>
     <p class="text-base text-sepia-muted">左の本棚から本を1冊選ぶと、右にそのセットの中身が出ます。</p>
   </div>
+  <div class="flex flex-wrap items-center gap-3">
+  {# 作成した教材セットを全部見る画面（教材セット一覧）への入口 #}
+  <a href="/teacher/material-sets" class="inline-flex items-center min-h-12 px-5 border border-rose-line rounded-lg bg-cream-paper text-base font-bold text-crimson-dark hover:bg-rose-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">教材セット一覧</a>
   <a href="/teacher/materials" class="inline-flex items-center gap-2 min-h-12 px-5 border border-crimson rounded-lg bg-cream-paper text-base font-bold text-crimson-dark hover:bg-rose-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
     新規作成
   </a>
+  </div>
 </div>
 
 {# 幅1024px以上は左に本棚、右に詳細。それより狭いと、本棚の下に詳細 #}

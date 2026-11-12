@@ -1265,8 +1265,16 @@ def teacher_candidate_edit_submit(
 # TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
 @app.get("/teacher/material-sets", response_class=HTMLResponse)
 def teacher_material_sets(request: Request):
+    material_sets = get_confirmed_material_sets()
+    # 教材セットごとの授業の状態（授業の画面と同じ判定）。not_started（まだ）/ open（授業中）/ ended（終了した）
+    lesson_statuses = {}
+    for s in material_sets:
+        lesson = db.get_last_lesson(s["id"])
+        lesson_statuses[s["id"]] = "not_started" if lesson is None else ("open" if lesson["ended_at"] is None else "ended")
     return templates.TemplateResponse(
-        request, "teacher_material_sets.html", {"material_sets": get_confirmed_material_sets()}
+        request,
+        "teacher_material_sets.html",
+        {"material_sets": material_sets, "lesson_statuses": lesson_statuses},
     )
 
 

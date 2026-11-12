@@ -1,75 +1,197 @@
 {# 教師用：授業の画面（#43、#49）。material_set / status / submissions は main.py の teacher_lesson() から渡す #}
 {# status は not_started（まだ）/ open（授業中）/ ended（終了した）。submissions は生徒ごとの対話と感想の提出状況 #}
-{# バックエンド担当が、動く最低限の見た目で作った。見た目は Figma に合わせて直してよい（変数名と form の送信先は変えない） #}
+{# 見た目の基準は docs/reference/lesson-before.html（まだ開始していない）と lesson-live.html（授業中）。変数名と form の送信先は変えない #}
+{# 幅641px以上・高さ560px以上では、ページ全体を動かさず、生徒の一覧の枠だけがスクロールする。1180×820 のウィンドウ（ブラウザのバーを除いた表示領域は約1180×690〜740）で、ページにスクロールが出ないようにしている #}
 {% extends "teacher_base.html" %}
-{% from "_components.html" import page_header, btn_primary, btn_secondary, badge %}
+{% set nav_current = "materials" %}
+{# この画面からは、生徒のチャット一覧・感想の提出状況へは行かない（ヘッダーは「教材セット選択」だけ。チャット一覧へは、下のボタンから行く） #}
+{% set hide_nav = ["chats", "submissions"] %}
 
 {% block title %}授業 | {% endblock %}
+{% block body_class %}bg-cream text-sepia tl-page{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&display=swap">
+{# Tailwind の class で書けない部分（1画面に収める高さの計算、一覧のスクロール、札の形）だけをここにまとめる。色は基準HTMLの値を直書き（Tailwind は、その画面で class に使っていない @theme の変数を出力しないため） #}
+<style>
+  body.tl-page{font-family:'Noto Sans JP',sans-serif}
+  body.tl-page>main{max-width:960px;width:100%;margin:0 auto;padding:16px 32px 18px;display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:normal}
+  .tl-serif{font-family:'Noto Serif JP',serif;font-weight:700}
+  .tl-h1{margin:0;align-self:flex-start;padding-bottom:6px;border-bottom:3px solid #A61E22;font-size:24px;line-height:1.4;overflow-wrap:anywhere}
+  .tl-top{display:grid;grid-template-columns:7fr 5fr;gap:14px;align-items:stretch}
+  .tl-card{min-width:0;background:#FFFDF8;border:1px solid #E5D9C3;border-radius:14px;padding:14px 18px;display:flex;flex-direction:column;gap:6px}
+  .tl-card.is-go{background:#FBF1DC;border:2px solid #E4C26A;gap:8px}
+  .tl-card h2{margin:0;font-size:16px}
+  .tl-au{font-size:12px;color:#5C4B3B}
+  .tl-card .tl-q{margin:0;font-size:19px;line-height:1.6;overflow-wrap:anywhere;word-break:auto-phrase;text-wrap:balance}
+  .tl-roles{display:flex;flex-wrap:wrap;gap:6px 8px;margin:2px 0 0;padding:0;list-style:none}
+  .tl-roles li{min-width:0;display:inline-flex;align-items:center;gap:6px;padding:3px 12px 3px 4px;border:1px solid #E5D9C3;border-radius:999px;background:#F7F0E3;font-size:13px;overflow-wrap:anywhere}
+  .tl-ini{flex:none;width:22px;height:22px;border-radius:999px;background:#A61E22;color:#FFF8E7;font-family:'Noto Serif JP',serif;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .tl-st{align-self:flex-start;display:inline-block;padding:3px 12px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap}
+  .tl-st.is-before{border:1.5px dashed #8A7A68;background:#FFFDF8;color:#5C4B3B}
+  .tl-st.is-live{border:2px solid #A61E22;background:#FBE3E3;color:#8E1B1F}
+  .tl-st.is-ended{border:1.5px solid #8A7A68;background:#FFFDF8;color:#5C4B3B}
+  .tl-desc{margin:0;font-size:13px;color:#5C4B3B}
+  .tl-note{margin:0;font-size:12px;color:#5C4B3B}
+  .tl-cta{width:100%;min-height:44px;padding:0 20px;border:0;border-bottom:3px solid #E4C26A;border-radius:10px;background:#A61E22;color:#fff;font:inherit;font-size:15px;font-weight:700;letter-spacing:.06em;cursor:pointer}
+  .tl-cta:hover{background:#8E1B1F}
+  .tl-lsec{display:flex;flex-direction:column;gap:8px}
+  .tl-lt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+  .tl-lt h2{margin:0;font-size:17px}
+  .tl-count{font-size:14px;color:#5C4B3B}
+  .tl-bar{flex:1;min-width:120px;max-width:260px;height:10px;border-radius:999px;background:#E8DCC4;overflow:hidden}
+  .tl-bar i{display:block;height:100%;background:#A61E22;border-radius:999px}
+  .tl-list{min-height:240px;overflow-y:auto;border:1px solid #E5D9C3;border-radius:14px;background:#EFE5D0;padding:12px;display:flex;flex-direction:column;gap:10px;scrollbar-color:#C9B99C #F1EADB}
+  .tl-sd{flex:none;background:#FFFDF8;border:1px solid #E5D9C3;border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+  .tl-sh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+  .tl-sh b{font-size:15px;overflow-wrap:anywhere}
+  .tl-m{font-size:13px;color:#5C4B3B;overflow-wrap:anywhere}
+  .tl-tg{margin-left:auto}
+  .tl-ok,.tl-no{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap}
+  .tl-ok{background:#E9F3E6;border:1.5px solid #6E9A66;color:#2E5A2A}
+  .tl-no{border:1.5px dashed #8A7A68;background:#FFFDF8;color:#5C4B3B}
+  .tl-tx{margin:0;font-size:14px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+  .tl-tx span{font-size:12px;font-weight:700;color:#8E1B1F;margin-right:8px}
+  .tl-empty{min-height:240px;display:flex;align-items:center;justify-content:center;padding:16px;border:1px dashed #C9B99C;border-radius:14px;color:#5C4B3B;font-size:15px;text-align:center}
+  .tl-bot{flex:none;display:flex;flex-wrap:wrap;gap:12px}
+  .tl-ob{min-height:40px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #C9A9A3;border-radius:8px;background:#FFFDF8;font-size:15px;font-weight:700;color:#8E1B1F;white-space:nowrap}
+  .tl-ob:hover{background:#F8E3E0}
+  .tl-bc{flex:none;margin:0 0 -6px;padding:0;list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13px;color:#5C4B3B;overflow-wrap:anywhere}
+  .tl-bc li+li::before{content:"›";margin-right:8px;color:#8A7A68}
+  .tl-bc a{color:#8E1B1F;text-decoration:underline}
+  .tl-cta:focus-visible,.tl-ob:focus-visible,.tl-list:focus-visible,.tl-bc a:focus-visible{outline:3px solid #1F2A44;outline-offset:2px}
+
+  {# 1画面に収める：body を縦の flex にして、一覧の枠だけを伸び縮みさせる #}
+  @media (min-width:641px) and (min-height:560px){
+    body.tl-page{height:100dvh;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+    body.tl-page>main{flex:1;min-height:0;overflow-y:auto}
+    .tl-lsec{flex:1;min-height:0}
+    .tl-list,.tl-empty{flex:1;min-height:120px}
+  }
+  @media (max-width:640px){
+    body.tl-page>main{padding:16px 16px 28px}
+    .tl-top{grid-template-columns:1fr}
+    .tl-bot{flex-direction:column}
+    .tl-ob{width:100%;white-space:normal;text-align:center}
+  }
+</style>
+{% endblock %}
 
 {% block content %}
 {% set lesson_url = "/teacher/material-sets/" ~ (material_set.id | urlencode) ~ "/lesson" %}
-<div class="flex flex-col gap-6">
-  {{ page_header(material_set.title ~ " の授業") }}
+{# 下のボタンの文言と移動先は、ここだけで直す #}
+{# 戻る先は、教材セット選択で、この教材セットを選んだ状態の画面 #}
+{% set back_label = "教材セット選択に戻る" %}
+{% set back_url = "/teacher/material-sets/" ~ (material_set.id | urlencode) %}
+{# 授業を開始した後に、生徒のチャット一覧を見るボタン（まだ開始していないときは出さない） #}
+{% set chats_label = "生徒のチャット一覧" %}
+{# ?set= を付けると、チャット一覧の「戻る」がこの授業の画面になる #}
+{% set chats_url = "/teacher/chats?set=" ~ (material_set.id | urlencode) %}
+{# 「教材の実施状況」（文言は仮）。移動先の画面はまだ無いので、URL を入れるまでボタンは出さない #}
+{% set progress_label = "教材の実施状況" %}
+{% set progress_url = none %}
 
-  <section class="flex flex-col gap-2 p-5 bg-paper border border-line rounded-lg">
-    <p class="m-0 text-base text-muted">{{ material_set.author }}　{{ material_set.range_label }}</p>
-    {% if material_set.question %}<p class="m-0">問い：{{ material_set.question }}</p>{% endif %}
-    <p class="m-0 text-base">ロール：{% for role in material_set.roles %}{{ role.name }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
-  </section>
+{% set submitted_count = submissions | selectattr("reflection") | list | length %}
+{% set total_count = submissions | length %}
+{% set not_submitted_count = total_count - submitted_count %}
 
-  {# 授業の状態と、開始・終了のボタン #}
-  <section class="flex flex-wrap items-center gap-4">
-    {% if status == "open" %}
-      {{ badge("授業中", "accent") }}
-      <p class="m-0">生徒のトップに、この教材セットが表示されています。</p>
-      <form action="{{ lesson_url }}/end" method="post" class="ml-auto"
-            onsubmit="return confirm('授業を終了すると、生徒は新しい対話を始められなくなります。終了しますか？')">
-        {{ btn_primary("生徒の感想を保存して授業終了") }}
-      </form>
-    {% elif status == "ended" %}
-      {{ badge("終了しました") }}
-      <p class="m-0">生徒は、この教材セットで新しい対話を始められません。</p>
-      <form action="{{ lesson_url }}/start" method="post" class="ml-auto">
-        {{ btn_primary("もう一度授業を開始する") }}
-      </form>
-    {% else %}
-      {{ badge("まだ開始していません") }}
-      <p class="m-0">開始すると、生徒のトップにこの教材セットが表示されます。</p>
-      <form action="{{ lesson_url }}/start" method="post" class="ml-auto">
-        {{ btn_primary("授業を開始する") }}
-      </form>
-    {% endif %}
-  </section>
+<nav aria-label="パンくずリスト"><ol class="tl-bc">
+  <li><a href="{{ back_url }}">教材セット選択</a></li>
+  <li aria-current="page">{{ material_set.title }} の授業</li>
+</ol></nav>
 
-  {# 生徒ごとの提出状況 #}
-  <section class="flex flex-col gap-3">
-    <h2 class="text-xl font-bold">
-      感想の提出状況
-      <span class="text-base font-normal text-muted">（提出 {{ submissions | selectattr("reflection") | list | length }} / {{ submissions | length }} 人）</span>
-    </h2>
-    {% if submissions %}
-      <ul class="flex flex-col gap-3">
-        {% for s in submissions %}
-          <li class="flex flex-col gap-2 p-4 bg-paper border border-line rounded-lg">
-            <div class="flex flex-wrap items-center gap-3">
-              <span class="font-bold">{{ s.student_name }}</span>
-              <span class="text-base text-muted">ロール：{{ s.role_name }}　発言 {{ s.message_count }} 回</span>
-              {% if s.reflection %}{{ badge("提出済み", "accent") }}{% else %}{{ badge("未提出") }}{% endif %}
-            </div>
-            {% if s.pre_opinion %}
-              <p class="m-0 text-base whitespace-pre-wrap break-words"><span class="text-muted">対話前：</span>{{ s.pre_opinion }}</p>
-            {% endif %}
-            {% if s.reflection %}
-              <p class="m-0 text-base whitespace-pre-wrap break-words"><span class="text-muted">対話後：</span>{{ s.reflection }}</p>
-            {% endif %}
-          </li>
+<h1 class="tl-h1 tl-serif">{{ material_set.title }} の授業</h1>
+
+<div class="tl-top">
+  {# 教材カード #}
+  <section class="tl-card" aria-label="教材">
+    <span class="tl-au">{% if material_set.author %}{{ material_set.author }}　{% endif %}{{ material_set.range_label }}</span>
+    {% if material_set.question %}<h2 class="tl-q tl-serif">{{ material_set.question }}</h2>{% endif %}
+    {% if material_set.roles %}
+      <ul class="tl-roles" aria-label="ロール">
+        {% for role in material_set.roles %}
+          <li><span class="tl-ini" aria-hidden="true">{{ role.name[:1] }}</span>{{ role.name }}</li>
         {% endfor %}
       </ul>
-    {% else %}
-      <p class="text-muted">まだ、この教材セットで対話した生徒はいません。</p>
     {% endif %}
   </section>
 
-  <div>{{ btn_secondary("作成した教材セットに戻る", href="/teacher/material-sets") }}</div>
+  {# 授業の状態と、開始・終了のボタン（form の送信先・内容は今のまま） #}
+  <section class="tl-card is-go">
+    <h2 class="tl-serif">授業の状態</h2>
+    {% if status == "open" %}
+      <span class="tl-st is-live">授業中</span>
+      <p class="tl-desc">生徒のトップに、この教材セットが表示されています。</p>
+      <form action="{{ lesson_url }}/end" method="post"
+            onsubmit="return confirm('授業を終了すると、生徒は新しい対話を始められなくなります。終了しますか？')">
+        <button type="submit" class="tl-cta">生徒の感想を保存して授業終了</button>
+      </form>
+      {% if not_submitted_count > 0 %}
+        <p class="tl-note">まだ提出していない人が {{ not_submitted_count }} 人います。</p>
+      {% endif %}
+    {% elif status == "ended" %}
+      <span class="tl-st is-ended">終了しました</span>
+      <p class="tl-desc">生徒は、この教材セットで新しい対話を始められません。</p>
+      <form action="{{ lesson_url }}/start" method="post">
+        <button type="submit" class="tl-cta">もう一度授業を開始する</button>
+      </form>
+    {% else %}
+      <span class="tl-st is-before">まだ開始していません</span>
+      <p class="tl-desc">開始すると、生徒のトップにこの教材セットが表示されます。</p>
+      <form action="{{ lesson_url }}/start" method="post">
+        <button type="submit" class="tl-cta">授業を開始する</button>
+      </form>
+    {% endif %}
+  </section>
+</div>
+
+{# 生徒ごとの提出状況 #}
+<section class="tl-lsec">
+  <div class="tl-lt">
+    <h2 class="tl-serif">感想の提出状況</h2>
+    <span class="tl-count">（提出 {{ submitted_count }} / {{ total_count }} 人）</span>
+    {% if total_count > 0 %}
+      <div class="tl-bar" role="img" aria-label="{{ submitted_count }}人が提出、{{ not_submitted_count }}人が未提出">
+        <i style="width:{{ (submitted_count * 100 / total_count) | round(1) }}%"></i>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if submissions %}
+    <div class="tl-list" tabindex="0" role="region" aria-label="生徒ごとの提出状況">
+      {% for s in submissions %}
+        <article class="tl-sd">
+          <div class="tl-sh">
+            <b>{{ s.student_name }}</b>
+            <span class="tl-m">ロール：{{ s.role_name }}</span>
+            <span class="tl-m">発言 {{ s.message_count }} 回</span>
+            <span class="tl-tg">
+              {% if s.reflection %}
+                <span class="tl-ok"><span aria-hidden="true">✓</span>提出済み</span>
+              {% else %}
+                <span class="tl-no">未提出</span>
+              {% endif %}
+            </span>
+          </div>
+          {% if s.pre_opinion %}
+            <p class="tl-tx"><span>対話前</span>{{ s.pre_opinion }}</p>
+          {% endif %}
+          {% if s.reflection %}
+            <p class="tl-tx"><span>対話後</span>{{ s.reflection }}</p>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="tl-empty">まだ、この教材セットで対話した生徒はいません。</p>
+  {% endif %}
+</section>
+
+<div class="tl-bot">
+  <a class="tl-ob" href="{{ back_url }}">{{ back_label }}</a>
+  {% if status != "not_started" %}<a class="tl-ob" href="{{ chats_url }}">{{ chats_label }}</a>{% endif %}
+  {% if progress_url %}<a class="tl-ob" href="{{ progress_url }}">{{ progress_label }}</a>{% endif %}
 </div>
 {% endblock %}
