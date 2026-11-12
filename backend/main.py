@@ -964,6 +964,23 @@ LOGIN_ROLES = {
 }
 
 
+# ログイン画面に出すエラー（auth.py が ?error= で渡す）。決まった文だけを出す
+GOOGLE_LOGIN_ERRORS = {
+    "google_invalid_client": "Googleログインの設定（クライアントのシークレット）が正しくありません。管理者に連絡してください。（invalid_client）",
+    "google_mismatching_state": "ログインの途中で時間がたったため、やり直しが必要です。もう一度ログインしてください。（mismatching_state）",
+    "google_access_denied": "Googleでのログインがキャンセルされました。もう一度ログインしてください。（access_denied）",
+    "google_invalid_grant": "ログインの途中で時間がたったため、やり直しが必要です。もう一度ログインしてください。（invalid_grant）",
+    "google_email_not_verified": "メールアドレスが確認済みのGoogleアカウントでログインしてください。",
+    "google_unknown": "Googleでのログインに失敗しました。もう一度ログインしてください。",
+}
+
+
+def login_error_message(role: str, error: str):
+    if role == "teacher" and error == "not_teacher":
+        return "このGoogleアカウントは、先生として登録されていません。登録したアカウントでログインし直すか、生徒用からログインしてください。"
+    return GOOGLE_LOGIN_ERRORS.get(error)
+
+
 def render_login(request: Request, role: str):
     # 役割に合わせてログイン画面を返す（role はユーザー入力ではなく固定の値）
     return templates.TemplateResponse(
@@ -976,9 +993,7 @@ def render_login(request: Request, role: str):
             # 開発用ログイン（.env の DEV_LOGIN=1 のときだけ出す）
             "dev_login_url": f"/auth/dev/login?role={role}" if auth.DEV_LOGIN else None,
             # 先生として登録されていないアカウントで、先生用から入ろうとしたとき（auth.py）
-            "error": "このGoogleアカウントは、先生として登録されていません。登録したアカウントでログインし直すか、生徒用からログインしてください。"
-            if role == "teacher" and request.query_params.get("error") == "not_teacher"
-            else None,
+            "error": login_error_message(role, request.query_params.get("error") or ""),
         },
     )
 
