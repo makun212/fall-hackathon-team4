@@ -5,8 +5,8 @@
 {# ナビの項目。URLや文言を変えるときはここだけ直す #}
 {% set teacher_nav = [
   {"key": "materials", "label": "教材セット選択", "href": "/teacher"},
-  {"key": "chats", "label": "生徒のチャット一覧", "href": "/teacher/chats"},
-  {"key": "submissions", "label": "感想の提出状況", "href": "/teacher/submissions"},
+  {"key": "chats", "label": "生徒のチャット一覧", "href": "/teacher/chats" ~ (("?set=" ~ (request.query_params.get("set") | urlencode)) if request.query_params.get("set") else "")},
+  {"key": "submissions", "label": "感想の提出状況", "href": "/teacher/submissions" ~ (("?set=" ~ (request.query_params.get("set") | urlencode)) if request.query_params.get("set") else "")},
 ] %}
 
 {% block header %}

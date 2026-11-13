@@ -1360,7 +1360,7 @@ def teacher_lesson_start(request: Request, material_set_id: str, show_chats: boo
         raise HTTPException(status_code=404, detail="教材セットが見つかりません")
     db.start_lesson(material_set_id, current_student_id(request))
     if show_chats:
-        return RedirectResponse("/teacher/chats", status_code=303)
+        return RedirectResponse(f"/teacher/chats?set={material_set_id}", status_code=303)
     return RedirectResponse(f"/teacher/material-sets/{material_set_id}/lesson", status_code=303)
 
 
@@ -1375,8 +1375,14 @@ def teacher_lesson_end(request: Request, material_set_id: str):
 # 教師用：生徒のチャット一覧。only_detected=1 なら、検知がある会話だけにする
 # TODO: 教師かどうかの確認（ログイン・権限）は、別issue「Googleログインと権限を実装する」でここに足す。今は誰でも開ける
 @app.get("/teacher/chats", response_class=HTMLResponse)
-def teacher_chats(request: Request, only_detected: int = 0):
+def teacher_chats(request: Request, only_detected: int = 0, material_set_id: str = Query("", alias="set")):
     summaries = get_conversation_summaries()
+    selected_set = None
+    if material_set_id:
+        selected_set = next((s for s in get_confirmed_material_sets() if s["id"] == material_set_id), None)
+        if selected_set is None:
+            raise HTTPException(status_code=404, detail="教材セットが見つかりません")
+        summaries = [s for s in summaries if s["material_set_id"] == material_set_id]
     detected = [s for s in summaries if s["detections"]]
     # 見出し用の教材セットのタイトル（会話に出てくる教材セットを、出てきた順に並べる）
     material_set_ids = dict.fromkeys(s["material_set_id"] for s in summaries)
@@ -1386,7 +1392,7 @@ def teacher_chats(request: Request, only_detected: int = 0):
         "teacher_chats.html",
         {
             "conversations": detected if only_detected == 1 else summaries,
-            "material_set_title": "、".join(titles),
+            "material_set_title": selected_set["title"] if selected_set else "、".join(titles),
             "detected_count": len(detected),
             "total_count": len(summaries),
             "only_detected": only_detected == 1,
