@@ -165,5 +165,29 @@ class AuthTests(unittest.TestCase):
         self.assertIn("佐藤 花子", self.app.get("/teacher/chats").text)
 
 
+    # ---- 先生のログインなし（TEACHER_OPEN_LOGIN） ----
+
+    def test_open_teacher_login_is_off_by_default(self):
+        with patch.object(auth, "TEACHER_OPEN_LOGIN", False):
+            self.assertIn("Googleアカウントでログイン", self.app.get("/teacher/login").text)
+            self.assertEqual(404, self.app.post("/auth/teacher/open", headers={"Origin": "http://testserver"}).status_code)
+
+    def test_open_teacher_login(self):
+        with patch.object(auth, "TEACHER_OPEN_LOGIN", True):
+            page = self.app.get("/teacher/login").text
+            self.assertIn("先生として入る", page)
+            self.assertNotIn("Googleアカウントでログイン", page)
+            # 生徒は今まで通り Google でログインする
+            self.assertIn("Googleアカウントでログイン", self.app.get("/student/login").text)
+            response = self.app.post("/auth/teacher/open", headers={"Origin": "http://testserver"}, follow_redirects=False)
+            self.assertEqual("/teacher", response.headers["location"])
+            self.assertEqual(200, self.app.get("/teacher").status_code)
+
+    def test_open_teacher_login_rejects_other_sites(self):
+        with patch.object(auth, "TEACHER_OPEN_LOGIN", True):
+            self.assertEqual(403, self.app.post("/auth/teacher/open", headers={"Origin": "https://evil.example"}).status_code)
+            self.assertEqual("/teacher/login", self.app.get("/teacher", follow_redirects=False).headers["location"])
+
+
 if __name__ == "__main__":
     unittest.main()

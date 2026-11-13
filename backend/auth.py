@@ -26,6 +26,10 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET") or ""
 # 先生として使う Google アカウントのメールアドレス（カンマ区切り）。大文字・小文字は区別しない
 # 「*」と書くと、先生用のログインから入った人は全員先生になる（審査員のアドレスがわからない発表の日だけ使う）
 TEACHER_EMAILS = {e.strip().lower() for e in (os.getenv("TEACHER_EMAILS") or "").split(",") if e.strip()}
+# 先生のログインなし。1 にすると、教師用ログイン画面の「先生として入る」ボタンだけで先生になれる（Google を使わない）
+# ハッカソンの発表用。URL を知っていれば誰でも先生の画面（生徒の会話を含む）を見られるので、授業で使うときは 0 にする
+TEACHER_OPEN_LOGIN = os.getenv("TEACHER_OPEN_LOGIN") == "1"
+OPEN_TEACHER_ID = "open:teacher"
 # 開発用ログイン。Google の設定がなくても手元で動かせるようにする。本番では絶対に 1 にしない
 DEV_LOGIN = os.getenv("DEV_LOGIN") == "1"
 # セッション（ログイン状態）を署名する鍵。本番では必ず .env に長いランダムな文字列を書く
@@ -149,6 +153,20 @@ def dev_login(request: Request, role: str = "student"):
     user = db.get_user(user["id"])
     start_session(request, user)
     return RedirectResponse(after_login_url(user, wanted_role), status_code=303)
+
+
+@router.post("/auth/teacher/open")
+def teacher_open_login(request: Request):
+    # 先生のログインなし（TEACHER_OPEN_LOGIN=1 のときだけ）。全員が同じ1人の先生として入る
+    if not TEACHER_OPEN_LOGIN:
+        return HTMLResponse("見つかりません", status_code=404)
+    # /auth/ は access_control の確認を通らないので、ここで別サイトからの送信を断る
+    if not same_origin_request(request):
+        return JSONResponse({"detail": "送信元を確認できません"}, status_code=403)
+    user = db.upsert_user(OPEN_TEACHER_ID, "", "先生")
+    db.set_user_role(user["id"], "teacher")
+    start_session(request, db.get_user(user["id"]))
+    return RedirectResponse(HOME_PAGES["teacher"], status_code=303)
 
 
 @router.post("/auth/logout")

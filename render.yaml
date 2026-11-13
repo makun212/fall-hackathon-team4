@@ -32,6 +32,9 @@ services:
         generateValue: true
       - key: SESSION_HTTPS_ONLY
         value: "1"
+      # 先生のログインなし（教師用ログイン画面の「先生として入る」だけで先生になる）。ハッカソンの発表用
+      - key: TEACHER_OPEN_LOGIN
+        value: "1"
       # 発表の前に、Gemini の上限に合わせて決める（chat.py の GLOBAL_LIMIT_PER_MINUTE）
       - key: CHAT_LIMIT_PER_MINUTE
         value: "10"
