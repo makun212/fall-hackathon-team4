@@ -30,7 +30,7 @@
     </nav>
     <a href="/" class="ml-auto my-1 inline-flex items-center min-h-12 px-4 border border-rose-line rounded-lg text-base font-bold text-crimson-dark hover:bg-rose-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">トップに戻る</a>
     {# ログアウト（#33） #}
-    <a href="/auth/logout" class="my-1 inline-flex items-center min-h-12 px-2 text-base text-sepia-muted underline hover:text-crimson-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">ログアウト</a>
+    <form action="/auth/logout" method="post"><button type="submit" class="my-1 inline-flex items-center min-h-12 px-2 text-base text-sepia-muted underline hover:text-crimson-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-crimson">ログアウト</button></form>
   </div>
 </header>
 {% endblock %}

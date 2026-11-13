@@ -74,7 +74,7 @@
       <a href="/" class="inline-flex items-center min-h-14 text-2xl font-bold">{{ app_name }}</a>
       {# ログイン中だけ出す（#33） #}
       {% if "session" in request.scope and request.session.get("user_id") %}
-        <a href="/auth/logout" class="inline-flex items-center min-h-11 px-2 text-base text-muted underline">ログアウト</a>
+        <form action="/auth/logout" method="post"><button type="submit" class="inline-flex items-center min-h-11 px-2 text-base text-muted underline">ログアウト</button></form>
       {% endif %}
     </div>
   </header>

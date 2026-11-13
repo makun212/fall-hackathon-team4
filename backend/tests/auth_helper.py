@@ -12,4 +12,6 @@ def login(client, role="teacher", user_id=TEST_USER_ID, name="テストの人"):
     db.upsert_user(user_id, "", name)
     db.set_user_role(user_id, role)
     client.cookies.set(auth.SESSION_COOKIE, auth.session_cookie({"user_id": user_id}))
+    # 通常のブラウザのフォーム送信と同じ送信元を付ける。
+    client.headers["Origin"] = str(client.base_url).rstrip("/")
     return user_id

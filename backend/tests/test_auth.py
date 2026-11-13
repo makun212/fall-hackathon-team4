@@ -134,7 +134,7 @@ class AuthTests(unittest.TestCase):
 
     def test_logout(self):
         self.google_login("student")
-        self.app.get("/auth/logout")
+        self.app.post("/auth/logout", headers={"Origin": "http://testserver"})
         self.assertEqual("/student/login", self.app.get("/student", follow_redirects=False).headers["location"])
 
     def test_google_not_configured(self):
