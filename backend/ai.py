@@ -1,3 +1,4 @@
+import logging
 import json
 import os
 from pathlib import Path
@@ -44,6 +45,7 @@ class AIBusyError(AIError):
 
 
 _client = None
+logger = logging.getLogger("uvicorn.error")
 
 
 def get_client():
@@ -101,6 +103,8 @@ def call_gemini(system_prompt: str, messages, config_extra=None):
     try:
         response = generate_with_fallback(to_contents(messages), config)
     except errors.APIError as e:
+        # 失敗の理由を Render のログに出す（コードと状態だけ。APIキーや生徒の入力は出さない）
+        logger.warning("Gemini の呼び出しに失敗しました: code=%s status=%s", e.code, getattr(e, "status", None))
         if e.code == 429:
             raise AIBusyError("AIが混み合っています。少し待ってから、もう一度送ってください。") from e
         raise AIError("AIが応答できませんでした。もう一度送ってください。") from e
@@ -108,6 +112,7 @@ def call_gemini(system_prompt: str, messages, config_extra=None):
         raise
     except Exception as e:
         # タイムアウトや通信の失敗など
+        logger.warning("Gemini の呼び出しに失敗しました: %s", type(e).__name__)
         raise AIError("AIが応答できませんでした。もう一度送ってください。") from e
 
     if not response.text:
