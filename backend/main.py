@@ -1785,8 +1785,9 @@ def chat(
     except AIBusyError:
         # 画面は、状態コードを見て決まった文を出す（index.html の MESSAGES）
         raise HTTPException(status_code=429)
-    except AIError:
-        raise HTTPException(status_code=502)
+    except AIError as e:
+        # 理由（エラーの番号と種類だけ）を返す。画面は状態コードを見て決まった文を出す
+        raise HTTPException(status_code=502, detail=f"AIError: {e.reason}")
     return templates.TemplateResponse(
         request,
         "_message.html",

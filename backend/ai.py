@@ -36,7 +36,8 @@ ROLE_TO_GEMINI = {"user": "user", "assistant": "model"}
 
 class AIError(Exception):
     # AIの呼び出しに失敗したとき。message は、そのまま画面に出してよい文にする
-    pass
+    # reason は失敗の理由（「403 PERMISSION_DENIED」など）。APIキーや生徒の入力は入れない
+    reason = "unknown"
 
 
 class AIBusyError(AIError):
@@ -104,20 +105,28 @@ def call_gemini(system_prompt: str, messages, config_extra=None):
         response = generate_with_fallback(to_contents(messages), config)
     except errors.APIError as e:
         # 失敗の理由を Render のログに出す（コードと状態だけ。APIキーや生徒の入力は出さない）
-        logger.warning("Gemini の呼び出しに失敗しました: code=%s status=%s", e.code, getattr(e, "status", None))
+        reason = f"{e.code} {getattr(e, 'status', '') or ''}".strip()
+        logger.warning("Gemini の呼び出しに失敗しました: %s", reason)
         if e.code == 429:
             raise AIBusyError("AIが混み合っています。少し待ってから、もう一度送ってください。") from e
-        raise AIError("AIが応答できませんでした。もう一度送ってください。") from e
+        error = AIError("AIが応答できませんでした。もう一度送ってください。")
+        error.reason = reason
+        raise error from e
     except AIError:
         raise
     except Exception as e:
         # タイムアウトや通信の失敗など
         logger.warning("Gemini の呼び出しに失敗しました: %s", type(e).__name__)
-        raise AIError("AIが応答できませんでした。もう一度送ってください。") from e
+        error = AIError("AIが応答できませんでした。もう一度送ってください。")
+        error.reason = type(e).__name__
+        raise error from e
 
     if not response.text:
         # 安全フィルターで止められたときなど
-        raise AIError("AIが返答を作れませんでした。言い方を変えて、もう一度送ってください。")
+        logger.warning("Gemini の返事が空でした")
+        error = AIError("AIが返答を作れませんでした。言い方を変えて、もう一度送ってください。")
+        error.reason = "empty_response"
+        raise error
     return response.text
 
 
