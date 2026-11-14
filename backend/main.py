@@ -1029,6 +1029,8 @@ def render_login(request: Request, role: str):
             "dev_login_url": f"/auth/dev/login?role={role}" if auth.DEV_LOGIN else None,
             # 先生のログインなし（TEACHER_OPEN_LOGIN=1）。教師用の画面では Google のボタンの代わりに出す
             "open_login_url": "/auth/teacher/open" if role == "teacher" and auth.TEACHER_OPEN_LOGIN else None,
+            # 生徒のログインなし（STUDENT_OPEN_LOGIN=1）。見た目は Google のボタンのまま、押すとすぐ入れる
+            "student_open_login_url": "/auth/student/open" if role == "student" and auth.STUDENT_OPEN_LOGIN else None,
             # 先生として登録されていないアカウントで、先生用から入ろうとしたとき（auth.py）
             "error": login_error_message(role, request.query_params.get("error") or ""),
         },

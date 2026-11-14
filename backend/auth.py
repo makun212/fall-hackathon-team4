@@ -30,6 +30,9 @@ TEACHER_EMAILS = {e.strip().lower() for e in (os.getenv("TEACHER_EMAILS") or "")
 # ハッカソンの発表用。URL を知っていれば誰でも先生の画面（生徒の会話を含む）を見られるので、授業で使うときは 0 にする
 TEACHER_OPEN_LOGIN = os.getenv("TEACHER_OPEN_LOGIN") == "1"
 OPEN_TEACHER_ID = "open:teacher"
+# 生徒のログインなし。1 にすると、生徒用ログイン画面のボタンを押すだけで入れる（Google を使わない）
+# 押すたびに別の生徒として登録するので、生徒どうしの会話は混ざらない。ハッカソンの発表用
+STUDENT_OPEN_LOGIN = os.getenv("STUDENT_OPEN_LOGIN") == "1"
 # 開発用ログイン。Google の設定がなくても手元で動かせるようにする。本番では絶対に 1 にしない
 DEV_LOGIN = os.getenv("DEV_LOGIN") == "1"
 # セッション（ログイン状態）を署名する鍵。本番では必ず .env に長いランダムな文字列を書く
@@ -167,6 +170,19 @@ def teacher_open_login(request: Request):
     db.set_user_role(user["id"], "teacher")
     start_session(request, db.get_user(user["id"]))
     return RedirectResponse(HOME_PAGES["teacher"], status_code=303)
+
+
+@router.post("/auth/student/open")
+def student_open_login(request: Request):
+    # 生徒のログインなし（STUDENT_OPEN_LOGIN=1 のときだけ）。押した人ごとに新しい生徒を作る
+    if not STUDENT_OPEN_LOGIN:
+        return HTMLResponse("見つかりません", status_code=404)
+    if not same_origin_request(request):
+        return JSONResponse({"detail": "送信元を確認できません"}, status_code=403)
+    tag = secrets.token_hex(2).upper()
+    user = db.upsert_user(f"open:student:{secrets.token_hex(8)}", "", f"生徒 {tag}")
+    start_session(request, user)
+    return RedirectResponse(HOME_PAGES["student"], status_code=303)
 
 
 @router.post("/auth/logout")
