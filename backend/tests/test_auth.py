@@ -189,5 +189,24 @@ class AuthTests(unittest.TestCase):
             self.assertEqual("/teacher/login", self.app.get("/teacher", follow_redirects=False).headers["location"])
 
 
+    def test_open_student_login(self):
+        with patch.object(auth, "STUDENT_OPEN_LOGIN", True):
+            self.assertIn('action="/auth/student/open"', self.app.get("/student/login").text)
+            response = self.app.post("/auth/student/open", headers={"Origin": "http://testserver"}, follow_redirects=False)
+            self.assertEqual("/student", response.headers["location"])
+            self.assertEqual(200, self.app.get("/student").status_code)
+            # 先生の画面には入れない
+            self.assertEqual(auth.NOT_TEACHER_PAGE, self.app.get("/teacher", follow_redirects=False).headers["location"])
+            # 押すたびに別の生徒になる
+            other = TestClient(main.app)
+            other.post("/auth/student/open", headers={"Origin": "http://testserver"})
+            self.assertNotEqual(self.app.cookies.get("session"), other.cookies.get("session"))
+
+    def test_open_student_login_is_off_by_default(self):
+        with patch.object(auth, "STUDENT_OPEN_LOGIN", False):
+            self.assertNotIn("/auth/student/open", self.app.get("/student/login").text)
+            self.assertEqual(404, self.app.post("/auth/student/open", headers={"Origin": "http://testserver"}).status_code)
+
+
 if __name__ == "__main__":
     unittest.main()
