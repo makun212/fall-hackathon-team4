@@ -63,6 +63,13 @@ def get_client():
     return _client
 
 
+def key_fingerprint():
+    # APIキーそのものは出さない。長さと sha256 の先頭8文字だけ
+    import hashlib
+    key = os.getenv("GEMINI_API_KEY") or ""
+    return f"key_len={len(key)} key_hash={hashlib.sha256(key.encode()).hexdigest()[:8]}"
+
+
 def to_contents(messages):
     # [{"role": "user" | "assistant", "content": "..."}] を Gemini の形に変える
     contents = []
@@ -106,6 +113,9 @@ def call_gemini(system_prompt: str, messages, config_extra=None):
     except errors.APIError as e:
         # 失敗の理由を Render のログに出す（コードと状態だけ。APIキーや生徒の入力は出さない）
         reason = f"{e.code} {getattr(e, 'status', '') or ''}".strip()
+        if e.code in (400, 401, 403):
+            # 鍵が断られたときは、鍵の長さと指紋（元に戻せないハッシュの先頭）を付けて、手元の .env と同じかを見比べられるようにする
+            reason += " " + key_fingerprint()
         logger.warning("Gemini の呼び出しに失敗しました: %s", reason)
         if e.code == 429:
             raise AIBusyError("AIが混み合っています。少し待ってから、もう一度送ってください。") from e
