@@ -53,7 +53,7 @@ def get_client():
     # 最初に呼ばれたときに1回だけ作る。APIキーがなければ AIError
     global _client
     if _client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = clean_key(os.getenv("GEMINI_API_KEY"))
         if not api_key:
             raise AIError("AIの設定が終わっていません。管理者に連絡してください。")
         _client = genai.Client(
@@ -63,10 +63,15 @@ def get_client():
     return _client
 
 
+def clean_key(value):
+    # 鍵に空白・改行は入らない。貼り付けたときに混ざった空白や改行を取り除く
+    return "".join((value or "").split())
+
+
 def key_fingerprint():
     # APIキーそのものは出さない。長さと sha256 の先頭8文字だけ
     import hashlib
-    key = os.getenv("GEMINI_API_KEY") or ""
+    key = clean_key(os.getenv("GEMINI_API_KEY"))
     return f"key_len={len(key)} key_hash={hashlib.sha256(key.encode()).hexdigest()[:8]}"
 
 
